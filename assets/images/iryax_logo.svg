@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+
+  <!-- White rounded-rect background -->
+  <rect width="120" height="120" rx="24" ry="24" fill="#FFFFFF"/>
+
+  <!-- "iG" bold text -->
+  <text
+    x="60"
+    y="60"
+    font-family="'Roboto', 'Arial', sans-serif"
+    font-size="40"
+    font-weight="700"
+    fill="#1A1726"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    letter-spacing="-1">iG</text>
+
+  <!-- "IRYAX" spaced caps -->
+  <text
+    x="60"
+    y="83"
+    font-family="'Roboto', 'Arial', sans-serif"
+    font-size="12"
+    font-weight="600"
+    fill="#6B6580"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    letter-spacing="3">IRYAX</text>
+
+  <!-- "SPACE" smaller caps -->
+  <text
+    x="60"
+    y="97"
+    font-family="'Roboto', 'Arial', sans-serif"
+    font-size="9"
+    font-weight="500"
+    fill="#AAA6B6"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    letter-spacing="3">SPACE</text>
+
+</svg>

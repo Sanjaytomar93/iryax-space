@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/cupertino.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:iryax_spaces/core/constants/api_endpoints.dart';
@@ -64,20 +63,18 @@ class BookingService {
       }),
     );
 
-    final decoded = jsonDecode(
-      response.body,
-    );
-
-    if (decoded is! Map) {
-      throw Exception(
-        'Invalid booking response.',
-      );
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } catch (_) {
+      throw Exception('Server error: ${response.statusCode}');
     }
 
-    final data =
-    Map<String, dynamic>.from(
-      decoded,
-    );
+    if (decoded is! Map) {
+      throw Exception('Invalid booking response format.');
+    }
+
+    final data = Map<String, dynamic>.from(decoded);
 
     if (response.statusCode >= 200 &&
         response.statusCode < 300 &&
@@ -85,10 +82,12 @@ class BookingService {
       return data;
     }
 
-    throw Exception(
-      data['message']?.toString() ??
-          'Unable to create booking.',
-    );
+    // Return the actual message returned by server or fallback with status code
+    final errMsg = data['message'] ??
+        data['error'] ??
+        data['msg'] ??
+        'Unable to create booking (${response.statusCode})';
+    throw Exception(errMsg.toString());
   }
 
 
@@ -136,14 +135,6 @@ class BookingService {
         'startDate': startDate,
         'startTime': startTime,
       }),
-    );
-
-    debugPrint(
-      'CREATE VISIT STATUS: ${response.statusCode}',
-    );
-
-    debugPrint(
-      'CREATE VISIT RESPONSE: ${response.body}',
     );
 
     final decoded =
@@ -241,14 +232,6 @@ class BookingService {
         if (token.isNotEmpty)
           'Authorization': 'Bearer $token',
       },
-    );
-
-    debugPrint(
-      'USER VISITS STATUS: ${response.statusCode}',
-    );
-
-    debugPrint(
-      'USER VISITS RESPONSE: ${response.body}',
     );
 
     final decoded = jsonDecode(

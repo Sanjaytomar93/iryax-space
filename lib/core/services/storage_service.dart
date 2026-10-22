@@ -1,3 +1,4 @@
+import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 
 class StorageService {
@@ -80,9 +81,16 @@ class StorageService {
   // SESSION GETTERS
   // ============================================================
 
-  static bool get isLoggedIn =>
-      _box.read<bool>(_isLoggedInKey) ??
-          false;
+  /// True only when login flag is set AND a non-empty auth token exists.
+  /// Prevents stale `is_logged_in` from treating the user as logged in
+  /// after cache/data clears or incomplete restores.
+  static bool get isLoggedIn {
+    final loggedIn =
+        _box.read<bool>(_isLoggedInKey) ?? false;
+    final authToken =
+        _box.read<String>(_tokenKey) ?? '';
+    return loggedIn && authToken.trim().isNotEmpty;
+  }
 
   static String get token =>
       _box.read<String>(_tokenKey) ?? '';
@@ -410,8 +418,29 @@ class StorageService {
   }
 
   // ============================================================
-  // LOGOUT
+  // LOGOUT / CLEAR CACHE
   // ============================================================
+
+  /// Clears session when `is_logged_in` is true but token is missing.
+  static Future<void> clearStaleSessionIfNeeded() async {
+    final loggedInFlag =
+        _box.read<bool>(_isLoggedInKey) ?? false;
+    final authToken =
+        (_box.read<String>(_tokenKey) ?? '').trim();
+
+    if (loggedInFlag && authToken.isEmpty) {
+      await logout();
+    }
+  }
+
+  /// Full local wipe of session + registration cache.
+  static Future<void> clearAll() async {
+    await _box.erase();
+
+    try {
+      Get.deleteAll(force: true);
+    } catch (_) {}
+  }
 
   static Future<void> logout() async {
     await _box.remove(
@@ -450,5 +479,9 @@ class StorageService {
       _isLoggedInKey,
       false,
     );
+
+    try {
+      Get.deleteAll(force: true);
+    } catch (_) {}
   }
 }

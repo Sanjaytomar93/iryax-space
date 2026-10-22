@@ -263,6 +263,9 @@ class ProfileController
   Future<void> logout() async {
     await StorageService.logout();
 
+    // Drop permanent controllers so the next login starts clean.
+    Get.deleteAll(force: true);
+
     Get.offAllNamed(
       AppRoutes.login,
     );

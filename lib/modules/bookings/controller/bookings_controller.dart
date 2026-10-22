@@ -9,6 +9,7 @@ import 'package:iryax_spaces/modules/bookings/widget/booking_details_dialog.dart
 import 'package:iryax_spaces/modules/bookings/widget/cancel_booking_dialog.dart';
 import 'package:iryax_spaces/modules/bookings/widget/replace_space_dialog.dart';
 import 'package:iryax_spaces/modules/bookings/widget/site_visit_details_dialog.dart';
+import 'package:iryax_spaces/modules/dashboard(home)/controller/home_controller.dart';
 
 class BookingsController extends GetxController {
   final searchController = TextEditingController();
@@ -51,12 +52,23 @@ class BookingsController extends GetxController {
   final selectedVisitDate =
   Rxn<DateTime>();
 
+  bool _siteVisitsLoadedOnce = false;
+
   @override
   void onInit() {
     super.onInit();
 
+    // Only bookings for dashboard stats — site visits load when Bookings tab needs them.
     loadBookings();
-    loadSiteVisits();
+  }
+
+  Future<void> ensureSiteVisitsLoaded() async {
+    if (_siteVisitsLoadedOnce ||
+        isLoadingVisits.value ||
+        siteVisits.isNotEmpty) {
+      return;
+    }
+    await loadSiteVisits();
   }
 
 
@@ -350,6 +362,10 @@ class BookingsController extends GetxController {
       bookings.assignAll(
         result,
       );
+
+      if (Get.isRegistered<HomeController>()) {
+        Get.find<HomeController>().syncWithBookings(result);
+      }
     } catch (e) {
       bookingError.value = e
           .toString()
@@ -394,6 +410,7 @@ class BookingsController extends GetxController {
       siteVisits.assignAll(
         result,
       );
+      _siteVisitsLoadedOnce = true;
 
       debugPrint(
         'SITE VISITS CONTROLLER COUNT: ${siteVisits.length}',

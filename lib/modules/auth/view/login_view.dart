@@ -131,9 +131,12 @@ class LoginView extends GetView<AuthController> {
 
                           const SizedBox(height: 24),
 
-                          GradientButton(
-                            text: 'Sign In',
-                            onPressed: controller.login,
+                          Obx(
+                            () => GradientButton(
+                              text: 'Sign In',
+                              isLoading: controller.isLoginLoading.value,
+                              onPressed: controller.login,
+                            ),
                           ),
 
                           const SizedBox(height: 26),

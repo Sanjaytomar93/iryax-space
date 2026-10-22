@@ -64,6 +64,10 @@ class SpaceModel {
   factory SpaceModel.fromJson(
       Map<String, dynamic> json,
       ) {
+    final parsedCapacity = int.tryParse(
+      json['capacity']?.toString() ?? '',
+    ) ?? 0;
+
     return SpaceModel(
       id: json['_id']?.toString() ?? '',
       ownerId: json['owner']?.toString() ?? '',
@@ -71,10 +75,7 @@ class SpaceModel {
       description:
       json['description']?.toString() ?? '',
 
-      capacity: int.tryParse(
-        json['capacity']?.toString() ?? '',
-      ) ??
-          0,
+      capacity: parsedCapacity,
 
       price: double.tryParse(
         json['price']?.toString() ?? '',
@@ -136,14 +137,7 @@ class SpaceModel {
       )
           .toList(),
 
-      seats: (json['seats'] as List? ?? [])
-          .whereType<Map>()
-          .map(
-            (e) => SeatModel.fromJson(
-          Map<String, dynamic>.from(e),
-        ),
-      )
-          .toList(),
+      seats: _parseSeats(json['seats'], parsedCapacity),
 
       pricingPlans:
       (json['pricingPlans'] as List? ?? [])
@@ -164,6 +158,49 @@ class SpaceModel {
     );
   }
 
+  static List<SeatModel> _parseSeats(dynamic rawSeats, int capacity) {
+    final list = <SeatModel>[];
+
+    if (rawSeats is List && rawSeats.isNotEmpty) {
+      for (var i = 0; i < rawSeats.length; i++) {
+        final item = rawSeats[i];
+        if (item is Map) {
+          list.add(SeatModel.fromJson(Map<String, dynamic>.from(item)));
+        } else if (item != null) {
+          final str = item.toString();
+          final numVal = int.tryParse(str) ?? (i + 1);
+          list.add(SeatModel(
+            id: str,
+            name: numVal > 0 ? '$numVal' : str,
+            number: numVal,
+          ));
+        }
+      }
+    } else if (rawSeats is num || (rawSeats is String && int.tryParse(rawSeats) != null)) {
+      final count = int.tryParse(rawSeats.toString()) ?? 0;
+      for (var i = 1; i <= count; i++) {
+        list.add(SeatModel(
+          id: '$i',
+          name: '$i',
+          number: i,
+        ));
+      }
+    }
+
+    // Fallback: If no explicit seat items found in backend data but capacity > 0, generate seats
+    if (list.isEmpty && capacity > 0) {
+      for (var i = 1; i <= capacity; i++) {
+        list.add(SeatModel(
+          id: '$i',
+          name: '$i',
+          number: i,
+        ));
+      }
+    }
+
+    return list;
+  }
+
   bool get isMedicalChamber =>
       isChamber;
 
@@ -182,6 +219,24 @@ class SpaceModel {
     }
 
     return capacity;
+  }
+
+  List<SeatModel> get effectiveSeats {
+    if (seats.isNotEmpty) {
+      return seats;
+    }
+    final count = seatCount > 0 ? seatCount : capacity;
+    if (count > 0) {
+      return List.generate(
+        count,
+        (i) => SeatModel(
+          id: '${i + 1}',
+          name: '${i + 1}',
+          number: i + 1,
+        ),
+      );
+    }
+    return [];
   }
 
   String get timing {
@@ -264,13 +319,16 @@ class SeatModel {
   factory SeatModel.fromJson(
       Map<String, dynamic> json,
       ) {
+    final idVal = json['_id']?.toString() ?? json['id']?.toString() ?? '';
+    final numVal = int.tryParse(
+      json['number']?.toString() ?? json['seatNumber']?.toString() ?? '',
+    ) ?? 0;
+    final nameVal = json['name']?.toString() ?? '';
+
     return SeatModel(
-      id: json['_id']?.toString() ?? '',
-      name: json['name']?.toString() ?? '',
-      number: int.tryParse(
-        json['number']?.toString() ?? '',
-      ) ??
-          0,
+      id: idVal.isNotEmpty ? idVal : (numVal > 0 ? '$numVal' : nameVal),
+      name: nameVal.isNotEmpty ? nameVal : (numVal > 0 ? '$numVal' : 'Seat'),
+      number: numVal,
     );
   }
 }

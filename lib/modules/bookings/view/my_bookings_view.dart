@@ -5,6 +5,7 @@ import 'package:iryax_spaces/app/themes/app_colors.dart';
 import 'package:iryax_spaces/modules/bookings/controller/bookings_controller.dart';
 import 'package:iryax_spaces/modules/bookings/model/booking_model.dart';
 import 'package:iryax_spaces/modules/bookings/model/site_visit_model.dart';
+import 'package:iryax_spaces/modules/bookings/service/invoice_pdf_service.dart';
 
 class MyBookingsView extends GetView<BookingsController> {
   const MyBookingsView({
@@ -1606,7 +1607,7 @@ class MyBookingsView extends GetView<BookingsController> {
                 child: _actionButton(
                   Icons.download_outlined,
                   AppColors.dashboardGreen,
-                      () {},
+                  () => InvoicePdfService.previewInvoice(booking),
                 ),
               ),
 

@@ -13,6 +13,10 @@ class WishlistView extends GetView<WishlistController> {
 
   @override
   Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      controller.ensureLoaded();
+    });
+
     return ColoredBox(
       color: AppColors.lightBackground,
       child: ListView(
@@ -387,7 +391,7 @@ class WishlistView extends GetView<WishlistController> {
             const SizedBox(width: 8),
 
             InkWell(
-              onTap: controller.clearAll,
+              onTap: _confirmClearAll,
               borderRadius:
               BorderRadius.circular(9),
               child: Container(
@@ -428,6 +432,38 @@ class WishlistView extends GetView<WishlistController> {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmClearAll() async {
+    if (controller.items.isEmpty) {
+      return;
+    }
+
+    final confirmed = await Get.dialog<bool>(
+      AlertDialog(
+        title: const Text('Clear Wishlist'),
+        content: const Text(
+          'Remove all saved spaces from your wishlist?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(result: false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Get.back(result: true),
+            child: const Text(
+              'Clear All',
+              style: TextStyle(color: AppColors.dashboardRed),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await controller.clearAll();
+    }
   }
 
   Widget _summaryItem({

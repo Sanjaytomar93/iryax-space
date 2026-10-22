@@ -57,6 +57,9 @@ class WishlistController extends GetxController {
     ).toList();
   }
 
+  bool _hasLoadedOnce = false;
+  bool _isLoadingWishlist = false;
+
   @override
   void onInit() {
     super.onInit();
@@ -65,7 +68,16 @@ class WishlistController extends GetxController {
       _onSearchChanged,
     );
 
-    loadWishlist();
+    // Load early so Spaces hearts show correct state and users don't
+    // accidentally toggle items OFF thinking they are not saved.
+    Future.microtask(ensureLoaded);
+  }
+
+  Future<void> ensureLoaded({bool force = false}) async {
+    if (!force && (_hasLoadedOnce || _isLoadingWishlist || items.isNotEmpty)) {
+      return;
+    }
+    await loadWishlist();
   }
 
   void _onSearchChanged() {
@@ -78,30 +90,42 @@ class WishlistController extends GetxController {
   // ============================================================
 
   Future<void> loadWishlist() async {
-    if (isLoading.value) {
+    if (_isLoadingWishlist) {
       return;
     }
 
     try {
+      _isLoadingWishlist = true;
       isLoading.value = true;
       errorMessage.value = '';
 
-      final result =
-      await _wishlistService.getWishlist();
+      final previous = List<SpaceModel>.from(items);
+      final result = await _wishlistService.getWishlist();
 
-      items.assignAll(result);
+      // Never wipe a non-empty local list with a suspicious empty payload
+      // right after a network glitch / parse miss.
+      if (result.isEmpty && previous.isNotEmpty && _hasLoadedOnce) {
+        debugPrint(
+          'WISHLIST LOAD SKIPPED EMPTY OVERWRITE '
+          '(kept ${previous.length} local items)',
+        );
+      } else {
+        items.assignAll(result);
+      }
+
+      _hasLoadedOnce = true;
 
       debugPrint(
         'WISHLIST LOADED: ${items.length}',
       );
     } catch (e) {
-      errorMessage.value =
-          _friendlyError(e);
+      errorMessage.value = _friendlyError(e);
 
       debugPrint(
         'WISHLIST LOAD ERROR: $e',
       );
     } finally {
+      _isLoadingWishlist = false;
       isLoading.value = false;
     }
   }
@@ -154,7 +178,7 @@ class WishlistController extends GetxController {
         space.id,
       );
 
-      // Reload server state
+      // Soft refresh — keep optimistic UI if server returns empty/glitchy data.
       await loadWishlist();
     } catch (e) {
       // Roll back UI if API fails
@@ -171,8 +195,7 @@ class WishlistController extends GetxController {
       Get.snackbar(
         'Wishlist',
         _friendlyError(e),
-        snackPosition:
-        SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.BOTTOM,
       );
     } finally {
       updatingIds.remove(space.id);

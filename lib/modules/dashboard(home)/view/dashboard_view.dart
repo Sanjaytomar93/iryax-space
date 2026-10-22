@@ -1,329 +1,147 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import 'package:iryax_spaces/app/routes/app_routes.dart';
-import 'package:iryax_spaces/app/themes/app_colors.dart';
 import 'package:iryax_spaces/core/services/storage_service.dart';
 import 'package:iryax_spaces/modules/dashboard(home)/controller/home_controller.dart';
-import 'package:iryax_spaces/modules/spaces/controller/spaces_controller.dart';
-import 'package:iryax_spaces/modules/spaces/model/space_model.dart';
 import 'package:iryax_spaces/modules/bookings/controller/bookings_controller.dart';
 import 'package:iryax_spaces/modules/bookings/model/booking_model.dart';
+import 'package:iryax_spaces/modules/bookings/service/invoice_pdf_service.dart';
 
-class DashboardView extends StatelessWidget {
-  const DashboardView({
-    super.key,
+// ─────────────────────────────────────────────────────────
+// Figma Design Tokens
+// ─────────────────────────────────────────────────────────
+class _DC {
+  // Surfaces
+  static const whisper       = Color(0xFFF6F6FA);
+  static const white         = Color(0xFFFFFFFF);
+
+  // Text
+  static const steelGray     = Color(0xFF1E1B2E);
+  static const manatee       = Color(0xFF8A8A99);
+  static const frenchGray    = Color(0xFFB4B4C2);
+
+  // Primary accent
+  static const royalBlue     = Color(0xFF5B4FE9);
+  static const governorBay   = Color(0xFF4338CA);
+
+  // Borders
+  static const athensGray    = Color(0xFFE7E7F0);
+
+  // Stat icon backgrounds
+  static const selagoPurple  = Color(0xFFEFEEFC);   // Total
+  static const eggSour       = Color(0xFFFFF4DA);   // Pending
+  static const selago2       = Color(0xFFE6F1FB);   // Confirmed
+  static const ottoman       = Color(0xFFEAF9EE);   // Active
+  static const selagoViolet  = Color(0xFFF1EAFB);   // Completed
+  static const provPink      = Color(0xFFFDECEC);   // Cancelled
+
+  // Stat icon text / icon colours
+  static const govBayIcon    = Color(0xFF4338CA);
+  static const vesuvius      = Color(0xFFB45309);
+  static const funBlue       = Color(0xFF185FA5);
+  static const jewel         = Color(0xFF16803C);
+  static const purpleHeart   = Color(0xFF6D28D9);
+  static const tallPoppy     = Color(0xFFC0392B);
+
+  // Payment chip
+  static const oldLace       = Color(0xFFFDF6E3);
+  static const kuMera        = Color(0xFF8A6D1F);
+}
+
+// ─────────────────────────────────────────────────────────
+// Text style helpers
+// ─────────────────────────────────────────────────────────
+TextStyle _roboto({
+  required double size,
+  required Color color,
+  FontWeight weight = FontWeight.w400,
+  double? height,
+  double letterSpacing = 0,
+}) =>
+    TextStyle(
+      fontFamily: 'Roboto',
+      fontSize: size,
+      color: color,
+      fontWeight: weight,
+      height: height,
+      letterSpacing: letterSpacing,
+    );
+
+TextStyle _inter({
+  required double size,
+  required Color color,
+  FontWeight weight = FontWeight.w400,
+  double? height,
+}) =>
+    TextStyle(
+      fontFamily: 'Inter',
+      fontSize: size,
+      color: color,
+      fontWeight: weight,
+      height: height,
+    );
+
+// ─────────────────────────────────────────────────────────
+// Shimmer Effect Widget (pure Flutter, no extra package)
+// ─────────────────────────────────────────────────────────
+class _ShimmerBox extends StatefulWidget {
+  const _ShimmerBox({
+    required this.width,
+    required this.height,
+    this.borderRadius = 10,
   });
+  final double width;
+  final double height;
+  final double borderRadius;
 
-  // SpacesController get spacesController =>
-  //     Get.find<SpacesController>();
+  @override
+  State<_ShimmerBox> createState() => _ShimmerBoxState();
+}
 
-  HomeController get homeController =>
-      Get.find<HomeController>();
+class _ShimmerBoxState extends State<_ShimmerBox>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
 
-  BookingsController get bookingsController =>
-      Get.find<BookingsController>();
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: AppColors.lightBackground,
-      child: RefreshIndicator(
-        color: AppColors.lightPrimary,
-        onRefresh: () async {
-          await Future.wait([
-            homeController.loadDashboard(),
-            // spacesController.refreshSpaces(),
-            bookingsController.loadBookings(),
-
-          ]);
-        },
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(
-            16,
-            16,
-            16,
-            24,
-          ),
-
-          children: [
-            _buildHeader(),
-
-            const SizedBox(height: 16),
-
-            _buildStatsGrid(),
-
-            const SizedBox(height: 14),
-
-            _buildBookingSearch(),
-
-            const SizedBox(height: 8),
-
-            _buildBookingDateFilter(  context,),
-
-            const SizedBox(height: 8),
-
-            _buildBookingFilters(),
-
-            const SizedBox(height: 10),
-
-            _buildBookingCount(),
-
-            _buildClearFilters(),
-
-
-            const SizedBox(height: 12),
-
-            _buildDashboardBookings(),
-
-            const SizedBox(height: 70),
-          ],
-          // children: [
-          //   _buildHeader(),
-          //
-          //   const SizedBox(height: 16),
-          //
-          //   // _buildProfileCompletionCard(),
-          //
-          //   // const SizedBox(height: 16),
-          //
-          //   _buildStatsGrid(),
-          //
-          //   const SizedBox(height: 20),
-          //
-          //   // _buildSpacesHeader(),
-          //
-          //   // const SizedBox(height: 12),
-          //
-          //   // _buildSpaceSearch(),
-          //
-          //   // const SizedBox(height: 10),
-          //
-          //   // _buildCategoryFilters(),
-          //
-          //   // const SizedBox(height: 10),
-          //
-          //   // _buildCabinTypeFilters(),
-          //
-          //   // const SizedBox(height: 16),
-          //
-          //   // _buildSpacesList(),
-          //
-          //   const SizedBox(height: 70),
-          // ],
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // HEADER
-  // ============================================================
-
-  Widget _buildHeader() {
-    final name = StorageService.userName.trim();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(
-                text: 'My ',
-                style: TextStyle(
-                  color: AppColors.lightTextPrimary,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              TextSpan(
-                text: 'Dashboard',
-                style: TextStyle(
-                  color: AppColors.lightPrimary,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 4),
-
-        Text(
-          name.isNotEmpty
-              ? 'Welcome back, $name'
-              : 'Welcome back',
-          style: const TextStyle(
-            color: AppColors.lightTextSecondary,
-            fontSize: 12,
-          ),
-        ),
-      ],
-    );
-  }
-
- ////  Booking Search  ////
-
-  Widget _buildBookingSearch() {
-    return SizedBox(
-      height: 42,
-      child: TextField(
-        controller:
-        bookingsController.searchController,
-        onChanged:
-        bookingsController.updateSearch,
-
-        style: const TextStyle(
-          color: AppColors.lightTextPrimary,
-          fontSize: 12,
-        ),
-        decoration: InputDecoration(
-          hintText: 'Search bookings...',
-          hintStyle: const TextStyle(
-            color: AppColors.lightTextSecondary,
-            fontSize: 10,
-          ),
-          prefixIcon: const Icon(
-            Icons.search_rounded,
-            size: 17,
-            color:
-            AppColors.lightTextSecondary,
-          ),
-          filled: true,
-          fillColor: AppColors.lightSurface,
-          isDense: true,
-          contentPadding:
-          const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 10,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius:
-            BorderRadius.circular(10),
-            borderSide: const BorderSide(
-              color: AppColors.lightBorder,
-            ),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius:
-            BorderRadius.circular(10),
-            borderSide: const BorderSide(
-              color: AppColors.lightPrimary,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  ///Date Filter ///
-
-
-  Widget _buildBookingDateFilter(
-      BuildContext context,
-      ) {
-    return Obx(
-          () {
-        final selected =
-            bookingsController
-                .selectedBookingDate
-                .value;
-
-        final text =
-        selected == null
-            ? 'mm/dd/yyyy'
-            : '${selected.month.toString().padLeft(2, '0')}/'
-            '${selected.day.toString().padLeft(2, '0')}/'
-            '${selected.year}';
-
-        return InkWell(
-          onTap: () async {
-            final picked =
-            await showDatePicker(
-              context: context,
-              initialDate:
-              selected ??
-                  DateTime.now(),
-              firstDate:
-              DateTime(2020),
-              lastDate:
-              DateTime(2035),
-            );
-
-            if (picked != null) {
-              bookingsController
-                  .changeBookingDate(
-                picked,
-              );
-            }
-          },
-          borderRadius:
-          BorderRadius.circular(
-            10,
-          ),
-          child: Container(
-            height: 40,
-            padding:
-            const EdgeInsets.symmetric(
-              horizontal: 12,
-            ),
-            decoration: BoxDecoration(
-              color:
-              AppColors.lightSurface,
-              borderRadius:
-              BorderRadius.circular(
-                10,
-              ),
-              border: Border.all(
-                color:
-                AppColors.lightBorder,
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    text,
-                    style: const TextStyle(
-                      color: AppColors
-                          .lightTextSecondary,
-                      fontSize: 10,
-                    ),
-                  ),
-                ),
-
-                if (selected != null)
-                  GestureDetector(
-                    onTap: () {
-                      bookingsController
-                          .changeBookingDate(
-                        null,
-                      );
-                    },
-                    child: const Padding(
-                      padding:
-                      EdgeInsets.only(
-                        right: 8,
-                      ),
-                      child: Icon(
-                        Icons.close,
-                        size: 14,
-                        color: AppColors
-                            .lightTextSecondary,
-                      ),
-                    ),
-                  ),
-
-                const Icon(
-                  Icons
-                      .calendar_today_outlined,
-                  size: 14,
-                  color: AppColors
-                      .lightTextSecondary,
-                ),
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (_, __) {
+        final t = (_ctrl.value * 3) - 1;
+        return Container(
+          width: widget.width,
+          height: widget.height,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(widget.borderRadius),
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: const [
+                Color(0xFFEBEBF4),
+                Color(0xFFF4F4FB),
+                Color(0xFFEBEBF4),
+              ],
+              stops: [
+                math.max(0.0, t - 0.3),
+                math.max(0.0, math.min(1.0, t)),
+                math.min(1.0, t + 0.3),
               ],
             ),
           ),
@@ -331,520 +149,1141 @@ class DashboardView extends StatelessWidget {
       },
     );
   }
+}
 
-  Widget _buildBookingFilters() {
-    return Obx(
-          () => Column(
-        children: [
-          Row(
+// ─────────────────────────────────────────────────────────
+// Dashboard View
+// ─────────────────────────────────────────────────────────
+class DashboardView extends StatefulWidget {
+  const DashboardView({super.key});
+
+  @override
+  State<DashboardView> createState() => _DashboardViewState();
+}
+
+class _DashboardViewState extends State<DashboardView> {
+  HomeController get _home {
+    if (Get.isRegistered<HomeController>()) {
+      return Get.find<HomeController>();
+    }
+    return Get.put(HomeController(), permanent: true);
+  }
+
+  BookingsController get _bookings {
+    if (Get.isRegistered<BookingsController>()) {
+      return Get.find<BookingsController>();
+    }
+    return Get.put(BookingsController(), permanent: true);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshData();
+    });
+  }
+
+  Future<void> _refreshData() async {
+    await Future.wait([
+      _home.loadDashboard(),
+      _bookings.loadBookings(),
+    ]);
+
+    if (_home.totalBookings.value == 0 && _bookings.bookings.isNotEmpty) {
+      _home.syncWithBookings(_bookings.bookings);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: _DC.whisper,
+      child: RefreshIndicator(
+        color: _DC.royalBlue,
+        backgroundColor: _DC.white,
+        displacement: 40,
+        strokeWidth: 2.5,
+        onRefresh: _refreshData,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
+          children: [
+            _buildHeader(),
+            const SizedBox(height: 14),
+            _buildStatsGrid(),
+            const SizedBox(height: 12),
+            _buildSearchBar(),
+            const SizedBox(height: 8),
+            _buildDateFilter(context),
+            const SizedBox(height: 8),
+            _buildStatusAndTypeRow(),
+            const SizedBox(height: 8),
+            _buildPaymentDropdown(),
+            const SizedBox(height: 6),
+            _buildBookingCount(),
+            _buildClearFilters(),
+            const SizedBox(height: 12),
+            _buildBookingList(),
+            const SizedBox(height: 80),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════
+  //  HEADER  — "My Dashboard / Welcome back, kumar"
+  // ══════════════════════════════════════════════════════
+  Widget _buildHeader() {
+    final name = StorageService.userName.trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text.rich(
+          TextSpan(
             children: [
-              Expanded(
-                child:
-                _dashboardDropdown(
-                  value:
-                  bookingsController
-                      .selectedStatus
-                      .value,
-                  items: const [
-                    'All Status',
-                    'Pending',
-                    'Confirmed',
-                    'Active',
-                    'Completed',
-                    'Cancelled',
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      bookingsController
-                          .changeStatus(
-                        value,
-                      );
-                    }
-                  },
+              TextSpan(
+                text: 'My ',
+                style: _roboto(
+                  size: 22,
+                  color: _DC.steelGray,
+                  weight: FontWeight.w700,
+                  height: 26 / 22,
                 ),
               ),
-
-              const SizedBox(width: 8),
-
-              Expanded(
-                child:
-                _dashboardDropdown(
-                  value:
-                  bookingsController
-                      .selectedType
-                      .value,
-                  items: const [
-                    'All Types',
-                    'Co-Working Space',
-                    'Medical Chamber',
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      bookingsController
-                          .changeType(
-                        value,
-                      );
-                    }
-                  },
+              TextSpan(
+                text: 'Dashboard',
+                style: _roboto(
+                  size: 22,
+                  color: _DC.royalBlue,
+                  weight: FontWeight.w700,
+                  height: 26 / 22,
                 ),
               ),
             ],
           ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          name.isNotEmpty ? 'Welcome back, $name' : 'Welcome back',
+          style: _roboto(size: 13, color: _DC.manatee, height: 15 / 13),
+        ),
+      ],
+    );
+  }
 
+  // ══════════════════════════════════════════════════════
+  //  STATS GRID  — 3 rows × 2 columns
+  // ══════════════════════════════════════════════════════
+  Widget _buildStatsGrid() {
+    return Obx(() {
+      // ── Show shimmer while loading ──────────────────────
+      if (_home.isLoading.value && _home.totalBookings.value == 0) {
+        return _buildStatsShimmer();
+      }
+
+      if (_home.errorMessage.value != null &&
+          _bookings.bookings.isEmpty &&
+          !_home.isLoading.value) {
+        return _statsError();
+      }
+
+      final total = _home.totalBookings.value > 0
+          ? _home.totalBookings.value
+          : _bookings.bookings.length;
+      final pending = _home.totalBookings.value > 0
+          ? _home.pendingBookings.value
+          : _bookings.bookingCount(BookingStatus.pending);
+      final confirmed = _home.totalBookings.value > 0
+          ? _home.confirmedBookings.value
+          : _bookings.bookingCount(BookingStatus.confirmed);
+      final active = _home.totalBookings.value > 0
+          ? _home.activeBookings.value
+          : _bookings.bookingCount(BookingStatus.active);
+      final completed = _home.totalBookings.value > 0
+          ? _home.completedBookings.value
+          : _bookings.bookingCount(BookingStatus.completed);
+      final cancelled = _home.totalBookings.value > 0
+          ? _home.cancelledBookings.value
+          : _bookings.bookingCount(BookingStatus.cancelled);
+
+      final sel = _bookings.selectedStatus.value;
+
+      return Column(
+        children: [
+          // Row 1 — Total | Pending
+          Row(children: [
+            Expanded(
+              child: _statCard(
+                title:     'TOTAL',
+                value:     '$total',
+                subtitle:  'all reservations',
+                icon:      Icons.inbox_outlined,
+                iconColor: _DC.govBayIcon,
+                iconBg:    _DC.selagoPurple,
+                selected:  sel == 'All Status',
+                highlighted: true,
+                onTap:     () => _applyFilter('All Status'),
+              ),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: _statCard(
+                title:     'PENDING',
+                value:     '$pending',
+                subtitle:  'awaiting confirmation',
+                icon:      Icons.access_time_rounded,
+                iconColor: _DC.vesuvius,
+                iconBg:    _DC.eggSour,
+                selected:  sel == 'Pending',
+                onTap:     () => _applyFilter('Pending'),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 9),
+          // Row 2 — Confirmed | Active
+          Row(children: [
+            Expanded(
+              child: _statCard(
+                title:     'CONFIRMED',
+                value:     '$confirmed',
+                subtitle:  'approved reservations',
+                icon:      Icons.check_circle_outline,
+                iconColor: _DC.funBlue,
+                iconBg:    _DC.selago2,
+                selected:  sel == 'Confirmed',
+                onTap:     () => _applyFilter('Confirmed'),
+              ),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: _statCard(
+                title:     'ACTIVE',
+                value:     '$active',
+                subtitle:  'active & confirmed',
+                icon:      Icons.home_outlined,
+                iconColor: _DC.jewel,
+                iconBg:    _DC.ottoman,
+                selected:  sel == 'Active',
+                onTap:     () => _applyFilter('Active'),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 9),
+          // Row 3 — Completed | Cancelled
+          Row(children: [
+            Expanded(
+              child: _statCard(
+                title:     'COMPLETED',
+                value:     '$completed',
+                subtitle:  'confirmed & paid',
+                icon:      Icons.check_circle_outline,
+                iconColor: _DC.purpleHeart,
+                iconBg:    _DC.selagoViolet,
+                selected:  sel == 'Completed',
+                onTap:     () => _applyFilter('Completed'),
+              ),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: _statCard(
+                title:     'CANCELLED',
+                value:     '$cancelled',
+                subtitle:  'cancelled reservations',
+                icon:      Icons.cancel_outlined,
+                iconColor: _DC.tallPoppy,
+                iconBg:    _DC.provPink,
+                selected:  sel == 'Cancelled',
+                onTap:     () => _applyFilter('Cancelled'),
+              ),
+            ),
+          ]),
+        ],
+      );
+    });
+  }
+
+  Widget _statCard({
+    required String     title,
+    required String     value,
+    required String     subtitle,
+    required IconData   icon,
+    required Color      iconColor,
+    required Color      iconBg,
+    required bool       selected,
+    required VoidCallback onTap,
+    bool highlighted = false,
+  }) {
+    final borderColor =
+        selected ? iconColor : (highlighted ? _DC.royalBlue : _DC.athensGray);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(
+          color: _DC.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: borderColor),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Title + icon
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: _roboto(
+                      size: 10,
+                      color: _DC.manatee,
+                      weight: FontWeight.w700,
+                      height: 12 / 10,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                Container(
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: iconBg,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, color: iconColor, size: 14),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            // Value
+            Text(
+              value,
+              style: _roboto(
+                size: 20,
+                color: _DC.steelGray,
+                weight: FontWeight.w700,
+                height: 24 / 20,
+              ),
+            ),
+            const SizedBox(height: 2),
+            // Subtitle
+            Text(
+              subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _roboto(size: 10, color: _DC.manatee, height: 12 / 10),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _statsError() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: _DC.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _DC.athensGray),
+      ),
+      child: Column(
+        children: [
+          const Icon(Icons.error_outline, color: _DC.tallPoppy, size: 28),
           const SizedBox(height: 8),
-
-          _dashboardDropdown(
-            value:
-            bookingsController
-                .selectedPaymentStatus
-                .value,
-            items: const [
-              'Payment Status',
-              'Paid',
-              'Pending',
-            ],
-            onChanged: (value) {
-              if (value != null) {
-                bookingsController
-                    .changePaymentStatus(
-                  value,
-                );
-              }
-            },
+          Text(
+            _home.errorMessage.value ?? 'Unable to load dashboard.',
+            textAlign: TextAlign.center,
+            style: _roboto(size: 9, color: _DC.manatee),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 30,
+            child: ElevatedButton(
+              onPressed: _refreshData,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _DC.royalBlue,
+                foregroundColor: _DC.white,
+              ),
+              child: const Text('Retry', style: TextStyle(fontSize: 8)),
+            ),
           ),
         ],
       ),
     );
   }
-  ///DahBoardDropdown///
 
-  Widget _dashboardDropdown({
+  // ── Shimmer placeholder for 3×2 stat grid ─────────────
+  Widget _buildStatsShimmer() {
+    Widget shimmerCard() => LayoutBuilder(
+          builder: (context, constraints) {
+            final w = constraints.maxWidth;
+            return Container(
+              padding: const EdgeInsets.all(13),
+              decoration: BoxDecoration(
+                color: _DC.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _DC.athensGray),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      _ShimmerBox(width: w * 0.45, height: 10),
+                      const Spacer(),
+                      const _ShimmerBox(width: 26, height: 26, borderRadius: 8),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  _ShimmerBox(width: w * 0.3, height: 20),
+                  const SizedBox(height: 6),
+                  _ShimmerBox(width: w * 0.65, height: 10),
+                ],
+              ),
+            );
+          },
+        );
+
+    Widget shimmerRow() => Row(children: [
+          Expanded(child: shimmerCard()),
+          const SizedBox(width: 9),
+          Expanded(child: shimmerCard()),
+        ]);
+
+    return Column(
+      children: [
+        shimmerRow(),
+        const SizedBox(height: 9),
+        shimmerRow(),
+        const SizedBox(height: 9),
+        shimmerRow(),
+      ],
+    );
+  }
+
+  // ── Shimmer placeholder for booking card list ──────────
+  Widget _buildBookingShimmer() {
+    Widget shimmerBookingCard() => Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: _DC.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _DC.athensGray, width: 1.1),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _ShimmerBox(width: 200, height: 16),
+              const SizedBox(height: 10),
+              const _ShimmerBox(width: 260, height: 12),
+              const SizedBox(height: 12),
+              const Divider(height: 1, thickness: 1, color: _DC.athensGray),
+              const SizedBox(height: 12),
+              Row(children: const [
+                _ShimmerBox(width: 80, height: 12),
+                Spacer(),
+                _ShimmerBox(width: 100, height: 12),
+              ]),
+              const SizedBox(height: 10),
+              Row(children: const [
+                _ShimmerBox(width: 60, height: 12),
+                Spacer(),
+                _ShimmerBox(width: 70, height: 22, borderRadius: 7),
+                SizedBox(width: 6),
+                _ShimmerBox(width: 50, height: 22, borderRadius: 7),
+              ]),
+              const SizedBox(height: 10),
+              Row(children: const [
+                _ShimmerBox(width: 60, height: 12),
+                Spacer(),
+                _ShimmerBox(width: 80, height: 14),
+              ]),
+              const SizedBox(height: 14),
+              Row(children: [
+                Expanded(
+                  child: Container(
+                    height: 36,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      color: const Color(0xFFEBEBF4),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Container(
+                    height: 36,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      color: const Color(0xFFEBEBF4),
+                    ),
+                  ),
+                ),
+              ]),
+            ],
+          ),
+        );
+
+    return Column(
+      children: List.generate(
+        3,
+        (i) => Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: shimmerBookingCard(),
+        ),
+      ),
+    );
+  }
+
+  void _applyFilter(String status) {
+    _bookings.clearDashboardFilters();
+    if (status != 'All Status') _bookings.changeStatus(status);
+  }
+
+  // ══════════════════════════════════════════════════════
+  //  SEARCH BAR
+  // ══════════════════════════════════════════════════════
+  Widget _buildSearchBar() {
+    return SizedBox(
+      height: 39,
+      child: TextField(
+        controller: _bookings.searchController,
+        onChanged: _bookings.updateSearch,
+        style: _inter(size: 12.3, color: _DC.steelGray),
+        decoration: InputDecoration(
+          hintText: 'Search bookings...',
+          hintStyle: _inter(size: 12.3, color: _DC.frenchGray),
+          prefixIcon:
+              const Icon(Icons.search_rounded, size: 15, color: _DC.frenchGray),
+          filled: true,
+          fillColor: _DC.white,
+          isDense: true,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: _DC.athensGray),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: _DC.royalBlue),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════
+  //  DATE FILTER
+  // ══════════════════════════════════════════════════════
+  Widget _buildDateFilter(BuildContext context) {
+    return Obx(() {
+      final selected = _bookings.selectedBookingDate.value;
+      final text = selected == null
+          ? 'mm/dd/yyyy'
+          : '${selected.month.toString().padLeft(2, '0')}/'
+              '${selected.day.toString().padLeft(2, '0')}/'
+              '${selected.year}';
+
+      return GestureDetector(
+        onTap: () async {
+          final picked = await showDatePicker(
+            context: context,
+            initialDate: selected ?? DateTime.now(),
+            firstDate: DateTime(2020),
+            lastDate: DateTime(2035),
+          );
+          if (picked != null) _bookings.changeBookingDate(picked);
+        },
+        child: Container(
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: _DC.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: _DC.athensGray),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  text,
+                  style: _roboto(
+                    size: 12,
+                    color: _DC.steelGray,
+                    height: 14 / 12,
+                  ),
+                ),
+              ),
+              if (selected != null)
+                GestureDetector(
+                  onTap: () => _bookings.changeBookingDate(null),
+                  child: const Padding(
+                    padding: EdgeInsets.only(right: 8),
+                    child: Icon(Icons.close, size: 14, color: _DC.manatee),
+                  ),
+                ),
+              const Icon(Icons.calendar_today_outlined,
+                  size: 14, color: _DC.manatee),
+            ],
+          ),
+        ),
+      );
+    });
+  }
+
+  // ══════════════════════════════════════════════════════
+  //  STATUS + TYPE ROW
+  // ══════════════════════════════════════════════════════
+  Widget _buildStatusAndTypeRow() {
+    return Obx(() => Row(
+          children: [
+            Expanded(
+              child: _dropdown(
+                value: _bookings.selectedStatus.value,
+                items: const [
+                  'All Status',
+                  'Pending',
+                  'Confirmed',
+                  'Active',
+                  'Completed',
+                  'Cancelled',
+                ],
+                onChanged: (v) {
+                  if (v != null) _bookings.changeStatus(v);
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _dropdown(
+                value: _bookings.selectedType.value,
+                items: const [
+                  'All Types',
+                  'Co-Working Space',
+                  'Medical Chamber',
+                ],
+                onChanged: (v) {
+                  if (v != null) _bookings.changeType(v);
+                },
+              ),
+            ),
+          ],
+        ));
+  }
+
+  // ══════════════════════════════════════════════════════
+  //  PAYMENT STATUS DROPDOWN
+  // ══════════════════════════════════════════════════════
+  Widget _buildPaymentDropdown() {
+    return Obx(() => _dropdown(
+          value: _bookings.selectedPaymentStatus.value,
+          items: const ['Payment Status', 'Paid', 'Pending'],
+          onChanged: (v) {
+            if (v != null) _bookings.changePaymentStatus(v);
+          },
+        ));
+  }
+
+  Widget _dropdown({
     required String value,
     required List<String> items,
-    required ValueChanged<String?>
-    onChanged,
+    required ValueChanged<String?> onChanged,
   }) {
     return Container(
-      height: 40,
-      padding: const EdgeInsets.symmetric(
-        horizontal: 12,
-      ),
+      height: 36,
+      padding: const EdgeInsets.only(left: 14, right: 4),
       decoration: BoxDecoration(
-        color: AppColors.lightSurface,
-        borderRadius:
-        BorderRadius.circular(10),
-        border: Border.all(
-          color: AppColors.lightBorder,
-        ),
+        color: _DC.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _DC.athensGray),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
           isExpanded: true,
-          icon: const Icon(
-            Icons.keyboard_arrow_down_rounded,
-            size: 16,
-            color:
-            AppColors.lightTextSecondary,
+          icon: const Icon(Icons.keyboard_arrow_down_rounded,
+              size: 16, color: _DC.manatee),
+          style: _roboto(
+            size: 11.8,
+            color: _DC.steelGray,
+            height: 14 / 11.8,
           ),
-          style: const TextStyle(
-            color:
-            AppColors.lightTextPrimary,
-            fontSize: 10,
-          ),
-          dropdownColor:
-          AppColors.lightSurface,
-          items:
-          items.map(
-                (item) {
-              return DropdownMenuItem<String>(
-                value: item,
-                child: Text(
-                  item,
-                  maxLines: 1,
-                  overflow:
-                  TextOverflow.ellipsis,
-                ),
-              );
-            },
-          ).toList(),
+          dropdownColor: _DC.white,
+          items: items
+              .map((item) => DropdownMenuItem<String>(
+                    value: item,
+                    child: Text(item,
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ))
+              .toList(),
           onChanged: onChanged,
         ),
       ),
     );
   }
 
-
-  ///Vooking Count
-
-
+  // ══════════════════════════════════════════════════════
+  //  BOOKING COUNT  &  CLEAR FILTERS
+  // ══════════════════════════════════════════════════════
   Widget _buildBookingCount() {
-    return Obx(
-          () => Align(
-        alignment: Alignment.centerRight,
-        child: Text(
-          'Showing ${bookingsController.filteredBookings.length} of ${bookingsController.bookings.length} bookings',          style: const TextStyle(
-            color:
-            AppColors.lightTextSecondary,
-            fontSize: 9,
+    return Obx(() => Align(
+          alignment: Alignment.centerRight,
+          child: Text(
+            'Showing ${_bookings.filteredBookings.length}'
+            ' of ${_bookings.bookings.length} bookings',
+            style: _roboto(size: 11.8, color: _DC.manatee),
           ),
-        ),
-      ),
-    );
+        ));
   }
-
 
   Widget _buildClearFilters() {
-    return Obx(
-          () {
-        final hasFilters =
-            bookingsController
-                .searchQuery.value
-                .isNotEmpty ||
-                bookingsController
-                    .selectedStatus
-                    .value !=
-                    'All Status' ||
-                bookingsController
-                    .selectedType
-                    .value !=
-                    'All Types' ||
-                bookingsController
-                    .selectedPaymentStatus
-                    .value !=
-                    'Payment Status' ||
-                bookingsController
-                    .selectedBookingDate
-                    .value !=
-                    null;
+    return Obx(() {
+      final hasFilters =
+          _bookings.searchQuery.value.isNotEmpty ||
+          _bookings.selectedStatus.value != 'All Status' ||
+          _bookings.selectedType.value != 'All Types' ||
+          _bookings.selectedPaymentStatus.value != 'Payment Status' ||
+          _bookings.selectedBookingDate.value != null;
 
-        if (!hasFilters) {
-          return const SizedBox.shrink();
-        }
+      if (!hasFilters) return const SizedBox.shrink();
 
-        return Align(
-          alignment:
-          Alignment.centerRight,
-          child: TextButton.icon(
-            onPressed:
-            bookingsController
-                .clearDashboardFilters,
-            icon: const Icon(
-              Icons.refresh_rounded,
-              size: 14,
-            ),
-            label: const Text(
-              'Clear filters',
-            ),
+      return Align(
+        alignment: Alignment.centerRight,
+        child: TextButton.icon(
+          onPressed: _bookings.clearDashboardFilters,
+          icon: const Icon(Icons.refresh_rounded, size: 14),
+          label: Text('Clear filters', style: _roboto(size: 11, color: _DC.royalBlue)),
+        ),
+      );
+    });
+  }
+
+  // ══════════════════════════════════════════════════════
+  //  BOOKING LIST
+  // ══════════════════════════════════════════════════════
+  Widget _buildBookingList() {
+    return Obx(() {
+      if (_bookings.isLoadingBookings.value && _bookings.bookings.isEmpty) {
+        return _buildBookingShimmer();
+      }
+
+      if (_bookings.bookingError.value != null &&
+          _bookings.bookings.isEmpty) {
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 16),
+              Text(
+                _bookings.bookingError.value ?? 'Unable to load bookings.',
+                style: _roboto(size: 12, color: _DC.manatee),
+              ),
+              const SizedBox(height: 10),
+              ElevatedButton(
+                onPressed: _refreshData,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _DC.royalBlue,
+                  foregroundColor: _DC.white,
+                ),
+                child: const Text('Retry', style: TextStyle(fontSize: 11)),
+              ),
+            ],
           ),
         );
-      },
-    );
+      }
+
+      final list = _bookings.filteredBookings;
+
+      if (list.isEmpty) {
+        return _buildEmptyState();
+      }
+
+      return Column(
+        children: list
+            .map((b) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _bookingCard(b),
+                ))
+            .toList(),
+      );
+    });
   }
 
+  Widget _buildEmptyState() {
+    final hasSearch = _bookings.searchQuery.value.trim().isNotEmpty;
+    final hasFilters = hasSearch ||
+        _bookings.selectedStatus.value != 'All Status' ||
+        _bookings.selectedBookingStat.value != 'All' ||
+        _bookings.selectedType.value != 'All Types' ||
+        _bookings.selectedPaymentStatus.value != 'Payment Status' ||
+        _bookings.selectedBookingDate.value != null;
 
-  ///Bookings
+    final String badgeText;
+    final String title;
+    final String subtitle;
+    final IconData icon;
 
+    if (hasSearch) {
+      badgeText = 'SEARCH FILTER ACTIVE';
+      title = 'No Matching Results';
+      subtitle = 'We couldn\'t find any reservations matching "${_bookings.searchQuery.value.trim()}". Check for typos or clear your search.';
+      icon = Icons.search_off_rounded;
+    } else if (hasFilters) {
+      badgeText = 'FILTERS APPLIED';
+      title = 'No Bookings Match Filters';
+      subtitle = 'No reservations match your selected criteria. Try adjusting status, space type, or date range.';
+      icon = Icons.filter_alt_outlined;
+    } else {
+      badgeText = 'NO RESERVATIONS';
+      title = 'No Bookings Found';
+      subtitle = 'You do not have any active or previous bookings listed under your account at this moment.';
+      icon = Icons.inbox_outlined;
+    }
 
-  Widget _buildDashboardBookings() {
-    return Obx(
-          () {
-        if (bookingsController
-            .isLoadingBookings.value &&
-            bookingsController
-                .bookings.isEmpty) {
-          return const Padding(
-            padding:
-            EdgeInsets.symmetric(
-              vertical: 40,
-            ),
-            child: Center(
-              child:
-              CircularProgressIndicator(
-                color:
-                AppColors.lightPrimary,
-              ),
-            ),
-          );
-        }
-
-        if (bookingsController
-            .bookingError.value !=
-            null &&
-            bookingsController
-                .bookings.isEmpty) {
-          return Center(
-            child: Text(
-              bookingsController
-                  .bookingError.value ??
-                  'Unable to load bookings.',
-              style: const TextStyle(
-                color: AppColors
-                    .lightTextSecondary,
-              ),
-            ),
-          );
-        }
-
-        final bookings =
-            bookingsController
-                .filteredBookings;
-
-        if (bookings.isEmpty) {
-          return const Padding(
-            padding:
-            EdgeInsets.symmetric(
-              vertical: 35,
-            ),
-            child: Center(
-              child: Text(
-                'No bookings match your filters.',
-                style: TextStyle(
-                  color: AppColors
-                      .lightTextSecondary,
-                ),
-              ),
-            ),
-          );
-        }
-
-        return Column(
-          children:
-          bookings
-              .map(
-                (booking) =>
-                Padding(
-                  padding:
-                  const EdgeInsets
-                      .only(
-                    bottom: 12,
-                  ),
-                  child:
-                  _dashboardBookingCard(
-                    booking,
-                  ),
-                ),
-          )
-              .toList(),
-        );
-      },
-    );
-  }
-
-  // DAShboard bookingcard //
-
-
-  Widget _dashboardBookingCard(
-      BookingModel booking,
-      ) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 4, bottom: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 38),
       decoration: BoxDecoration(
-        color: AppColors.lightSurface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.lightBorderStrong,
-          width: 1.1,
-        ),
-        boxShadow: [
+        color: _DC.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _DC.athensGray, width: 1.2),
+        boxShadow: const [
           BoxShadow(
-            color: Colors.black.withValues(
-              alpha: 0.03,
-            ),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Color(0x061E1B2E),
+            blurRadius: 20,
+            offset: Offset(0, 6),
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment:
-        CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
+          // Elegant layered concentric illustration badge
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              // Outer halo ring
+              Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _DC.selagoPurple.withValues(alpha: 0.45),
+                ),
+              ),
+              // Middle ring
+              Container(
+                width: 76,
+                height: 76,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _DC.selagoPurple,
+                  border: Border.all(
+                    color: _DC.royalBlue.withValues(alpha: 0.18),
+                    width: 1.5,
+                  ),
+                ),
+              ),
+              // Inner core circle with icon
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _DC.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: _DC.royalBlue.withValues(alpha: 0.12),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  icon,
+                  size: 26,
+                  color: _DC.royalBlue,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Micro badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4.5),
+            decoration: BoxDecoration(
+              color: _DC.selagoPurple,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: _DC.royalBlue.withValues(alpha: 0.15),
+              ),
+            ),
+            child: Text(
+              badgeText,
+              style: _roboto(
+                size: 9.5,
+                color: _DC.governorBay,
+                weight: FontWeight.w700,
+                letterSpacing: 0.8,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Title
           Text(
-            booking.spaceName,
-            style: const TextStyle(
-              color:
-              AppColors.lightTextPrimary,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
+            title,
+            textAlign: TextAlign.center,
+            style: _roboto(
+              size: 17,
+              color: _DC.steelGray,
+              weight: FontWeight.w700,
+              height: 22 / 17,
+            ),
+          ),
+          const SizedBox(height: 7),
+
+          // Subtitle
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 285),
+            child: Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: _inter(
+                size: 12.5,
+                color: _DC.manatee,
+                height: 1.5,
+              ),
             ),
           ),
 
-          const SizedBox(height: 6),
-
-          Row(
-            children: [
-              Expanded(
+          // Clean minimalist reset pill (only when filtered, no explore / refresh buttons!)
+          if (hasFilters) ...[
+            const SizedBox(height: 18),
+            GestureDetector(
+              onTap: _bookings.clearDashboardFilters,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                decoration: BoxDecoration(
+                  color: _DC.selagoPurple,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: _DC.royalBlue.withValues(alpha: 0.22),
+                  ),
+                ),
                 child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(
-                      Icons
-                          .location_on_outlined,
-                      size: 11,
-                      color: AppColors
-                          .lightTextSecondary,
+                      Icons.refresh_rounded,
+                      size: 13,
+                      color: _DC.royalBlue,
                     ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        booking.location,
-                        maxLines: 1,
-                        overflow:
-                        TextOverflow.ellipsis,
-                        style:
-                        const TextStyle(
-                          color: AppColors
-                              .lightTextSecondary,
-                          fontSize: 9,
-                        ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Reset Filters',
+                      style: _roboto(
+                        size: 11.5,
+                        color: _DC.royalBlue,
+                        weight: FontWeight.w600,
                       ),
                     ),
                   ],
                 ),
               ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 
-              // const SizedBox(width: 8),
-              //
-              // Text(
-              //   booking.customerName,
-              //   style: const TextStyle(
-              //     color: AppColors
-              //         .lightTextSecondary,
-              //     fontSize: 8,
-              //   ),
-              // ),
+  // ══════════════════════════════════════════════════════
+  //  BOOKING CARD (EXACT STYLE MATCHING REFERENCE IMAGE)
+  // ══════════════════════════════════════════════════════
+  Widget _bookingCard(BookingModel booking) {
+    final timeStr = () {
+      if (booking.startTime.isNotEmpty && booking.endTime.isNotEmpty) {
+        final dur = booking.duration.isNotEmpty ? ' (${booking.duration})' : '';
+        return '(${booking.startTime} - ${booking.endTime}$dur)';
+      } else if (booking.startTime.isNotEmpty) {
+        final dur = booking.duration.isNotEmpty ? ' (${booking.duration})' : '';
+        return '(${booking.startTime}$dur)';
+      }
+      return '(time TBD)';
+    }();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _DC.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _DC.athensGray, width: 1.1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Space name ──
+          Text(
+            booking.spaceName,
+            style: _roboto(
+              size: 15.5,
+              color: _DC.steelGray,
+              weight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // ── Location & Owner ──
+          Row(
+            children: [
+              const Icon(
+                Icons.location_on_outlined,
+                size: 14,
+                color: _DC.manatee,
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  booking.location,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _roboto(size: 11.5, color: _DC.manatee),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.person_outline,
+                    size: 14,
+                    color: _DC.manatee,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Owner: ${booking.customerName}',
+                    style: _roboto(size: 11.5, color: _DC.manatee),
+                  ),
+                ],
+              ),
             ],
           ),
 
           const SizedBox(height: 10),
-
-          const Divider(
-            height: 1,
-            color: AppColors.lightBorder,
-          ),
-
+          const Divider(height: 1, thickness: 1, color: _DC.athensGray),
           const SizedBox(height: 10),
 
+          // ── Date & Time ──
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Expanded(
-                child: Text(
-                  'Date & time',
-                  style: TextStyle(
-                    color: AppColors
-                        .lightTextSecondary,
-                    fontSize: 9,
-                    fontWeight:
-                    FontWeight.w600,
-                  ),
-                ),
-              ),
               Text(
-                '${booking.startDate}  ${booking.startTime}',
-                style: const TextStyle(
-                  color: AppColors
-                      .lightTextPrimary,
-                  fontSize: 9,
-                  fontWeight:
-                  FontWeight.w600,
+                'Date & time',
+                style: _roboto(
+                  size: 11.5,
+                  color: _DC.manatee,
+                  weight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                booking.startDate,
+                style: _roboto(
+                  size: 11,
+                  color: _DC.steelGray,
+                  weight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                timeStr,
+                style: _roboto(
+                  size: 9.5,
+                  color: _DC.manatee,
+                  weight: FontWeight.w400,
                 ),
               ),
             ],
           ),
 
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
 
+          // ── Status ──
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Expanded(
-                child: Text(
-                  'Status',
-                  style: TextStyle(
-                    color: AppColors
-                        .lightTextSecondary,
-                    fontSize: 9,
-                    fontWeight:
-                    FontWeight.w600,
-                  ),
+              Text(
+                'Status',
+                style: _roboto(
+                  size: 11.5,
+                  color: _DC.manatee,
+                  weight: FontWeight.w600,
                 ),
               ),
-
-              _dashboardStatusChip(
-                booking,
-              ),
-
-              const SizedBox(width: 5),
-
-              _dashboardPaymentChip(
-                booking,
-              ),
+              const Spacer(),
+              _statusChip(booking),
+              const SizedBox(width: 6),
+              _paymentChip(booking),
             ],
           ),
 
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
 
+          // ── Amount ──
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Expanded(
-                child: Text(
-                  'Amount',
-                  style: TextStyle(
-                    color: AppColors
-                        .lightTextSecondary,
-                    fontSize: 9,
-                    fontWeight:
-                    FontWeight.w600,
-                  ),
+              Text(
+                'Amount',
+                style: _roboto(
+                  size: 11.5,
+                  color: _DC.manatee,
+                  weight: FontWeight.w600,
                 ),
               ),
-
+              const Spacer(),
               Text(
                 booking.amount,
-                style: const TextStyle(
-                  color:
-                  AppColors.lightPrimary,
-                  fontSize: 10,
-                  fontWeight:
-                  FontWeight.w700,
+                style: _roboto(
+                  size: 13.5,
+                  color: _DC.governorBay,
+                  weight: FontWeight.w700,
                 ),
               ),
             ],
           ),
 
-          const SizedBox(height: 10),
+          const SizedBox(height: 14),
 
+          // ── View | Invoice buttons ──
           Row(
             children: [
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    bookingsController
-                        .openBookingDetails(
-                      booking,
-                    );
-                  },
-                  icon: const Icon(
-                    Icons.visibility_outlined,
-                    size: 12,
-                  ),
-                  label: const Text(
-                    'View',
-                  ),
+                child: _actionBtn(
+                  icon: Icons.visibility_outlined,
+                  label: 'View',
+                  color: _DC.governorBay,
+                  onTap: () => _bookings.openBookingDetails(booking),
                 ),
               ),
-
-              const SizedBox(width: 8),
-
+              const SizedBox(width: 10),
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(
-                    Icons.download_outlined,
-                    size: 12,
-                  ),
-                  label: const Text(
-                    'Invoice',
-                  ),
+                child: _actionBtn(
+                  icon: Icons.download_outlined,
+                  label: 'Invoice',
+                  color: _DC.jewel,
+                  onTap: () => InvoicePdfService.previewInvoice(booking),
                 ),
               ),
             ],
@@ -854,1536 +1293,106 @@ class DashboardView extends StatelessWidget {
     );
   }
 
-  Widget _dashboardStatusChip(
-      BookingModel booking,
-      ) {
-    final text =
-    bookingsController.bookingStatusText(
-      booking.status,
+  Widget _actionBtn({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 36,
+        decoration: BoxDecoration(
+          color: _DC.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: _DC.athensGray, width: 1.1),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 15, color: color),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: _inter(
+                size: 12,
+                color: color,
+                weight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
+  }
 
-    Color textColor;
-    Color backgroundColor;
+  // ── Status chip ──
+  Widget _statusChip(BookingModel booking) {
+    Color bg, text;
+    String label;
 
     switch (booking.status) {
       case BookingStatus.pending:
-        textColor =
-            AppColors.dashboardOrange;
-        backgroundColor =
-            AppColors.softOrange;
+        bg = _DC.eggSour;
+        text = _DC.vesuvius;
+        label = 'Pending';
         break;
-
       case BookingStatus.confirmed:
-        textColor =
-            AppColors.dashboardBlue;
-        backgroundColor =
-            AppColors.softBlue;
+        bg = _DC.selago2;
+        text = _DC.funBlue;
+        label = 'Confirmed';
         break;
-
       case BookingStatus.active:
-        textColor =
-            AppColors.dashboardGreen;
-        backgroundColor =
-            AppColors.softGreen;
+        bg = _DC.ottoman;
+        text = _DC.jewel;
+        label = 'Active';
         break;
-
       case BookingStatus.completed:
-        textColor =
-            AppColors.dashboardPurple;
-        backgroundColor =
-            AppColors.softPurple;
+        bg = _DC.selagoViolet;
+        text = _DC.purpleHeart;
+        label = 'Completed';
         break;
-
       case BookingStatus.cancelled:
-        textColor =
-            AppColors.dashboardRed;
-        backgroundColor =
-            AppColors.softRed;
+        bg = _DC.provPink;
+        text = _DC.tallPoppy;
+        label = 'Cancelled';
         break;
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 4,
-      ),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius:
-        BorderRadius.circular(6),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 8,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
+    return _chip(label: label, bg: bg, textColor: text);
+  }
+
+  // ── Payment chip ──
+  Widget _paymentChip(BookingModel booking) {
+    final isPaid = booking.paymentStatus == PaymentStatus.paid;
+    return _chip(
+      label: isPaid ? 'Paid' : 'pending',
+      bg: isPaid ? _DC.ottoman : _DC.oldLace,
+      textColor: isPaid ? _DC.jewel : _DC.kuMera,
     );
   }
 
-  Widget _dashboardPaymentChip(
-      BookingModel booking,
-      ) {
-    final isPaid =
-        booking.paymentStatus ==
-            PaymentStatus.paid;
-
-    final text =
-    bookingsController.paymentStatusText(
-      booking.paymentStatus,
-    );
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 4,
-      ),
-      decoration: BoxDecoration(
-        color: isPaid
-            ? AppColors.softGreen
-            : AppColors.softOrange,
-        borderRadius:
-        BorderRadius.circular(6),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: isPaid
-              ? AppColors.dashboardGreen
-              : AppColors.dashboardOrange,
-          fontSize: 8,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // PROFILE COMPLETION
-  // ============================================================
-
-  Widget _buildProfileCompletionCard() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(
-        16,
-        12,
-        16,
-        12,
-      ),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [
-            AppColors.profileCardStart,
-            AppColors.profileCardEnd,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: AppColors.lightBorder,
-        ),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 54,
-                height: 54,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.lightSurface,
-                  border: Border.all(
-                    color: AppColors.dashboardGreen,
-                    width: 2,
-                  ),
-                ),
-                alignment: Alignment.center,
-                child: const Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      '100%',
-                      style: TextStyle(
-                        color: AppColors.dashboardGreen,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    Text(
-                      'COMPLETE',
-                      style: TextStyle(
-                        color: AppColors.lightTextSecondary,
-                        fontSize: 6,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(width: 14),
-
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      '🎉 Profile Completion',
-                      style: TextStyle(
-                        color: AppColors.lightTextPrimary,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-
-                    const SizedBox(height: 6),
-
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _smallPill(
-                          'Completed: ',
-                          '100%',
-                          AppColors.dashboardGreen,
-                        ),
-                        _smallPill(
-                          'Pending: ',
-                          '0',
-                          AppColors.dashboardOrange,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          ClipRRect(
-            borderRadius: BorderRadius.circular(99),
-            child: const LinearProgressIndicator(
-              value: 1,
-              minHeight: 5,
-              backgroundColor: AppColors.lightBorder,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                AppColors.dashboardGreen,
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          const Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              '✓ 100% complete! 🎉',
-              style: TextStyle(
-                color: AppColors.dashboardGreen,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 10),
-
-          SizedBox(
-            width: double.infinity,
-            height: 38,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [
-                    AppColors.gradientBlueStart,
-                    AppColors.gradientPurpleEnd,
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: TextButton.icon(
-                onPressed: () {
-                  Get.toNamed(
-                    AppRoutes.profile,
-                  );
-                },
-                icon: const Icon(
-                  Icons.person_outline,
-                  color: Colors.white,
-                  size: 16,
-                ),
-                label: const Text(
-                  'View Profile',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _smallPill(
-      String prefix,
-      String value,
-      Color valueColor,
-      ) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 9,
-        vertical: 5,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.lightSurface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: AppColors.lightBorder,
-        ),
-      ),
-      child: RichText(
-        text: TextSpan(
-          style: const TextStyle(
-            fontSize: 10,
-            color: AppColors.lightTextSecondary,
-          ),
-          children: [
-            TextSpan(
-              text: prefix,
-            ),
-            TextSpan(
-              text: value,
-              style: TextStyle(
-                color: valueColor,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // STATS
-  //
-  // Booking APIs are not integrated yet.
-  // Keep these UI cards for now.
-  // We will replace the values with actual user booking data later.
-  // ============================================================
-
-
-  void _applyDashboardStatFilter(
-      String status,
-      ) {
-    // Clear search/date/type/payment first,
-    // so clicking a stats card shows the complete
-    // set for that status.
-    bookingsController
-        .clearDashboardFilters();
-
-    if (status != 'All Status') {
-      bookingsController
-          .changeStatus(status);
-    }
-  }
-
-  Widget _buildStatsGrid() {
-    return Obx(
-          () {
-        if (homeController.isLoading.value) {
-          return Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(
-              vertical: 32,
-            ),
-            decoration: BoxDecoration(
-              color: AppColors.lightSurface,
-              borderRadius:
-              BorderRadius.circular(12),
-              border: Border.all(
-                color: AppColors.lightBorder,
-              ),
-            ),
-            child: const Center(
-              child: CircularProgressIndicator(
-                color:
-                AppColors.lightPrimary,
-              ),
-            ),
-          );
-        }
-
-        if (homeController
-            .errorMessage.value !=
-            null) {
-          return Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(
-              18,
-            ),
-            decoration: BoxDecoration(
-              color: AppColors.lightSurface,
-              borderRadius:
-              BorderRadius.circular(12),
-              border: Border.all(
-                color: AppColors.lightBorder,
-              ),
-            ),
-            child: Column(
-              children: [
-                const Icon(
-                  Icons.error_outline,
-                  color:
-                  AppColors.dashboardRed,
-                  size: 28,
-                ),
-
-                const SizedBox(
-                  height: 8,
-                ),
-
-                Text(
-                  homeController
-                      .errorMessage.value ??
-                      'Unable to load dashboard.',
-                  textAlign:
-                  TextAlign.center,
-                  style: const TextStyle(
-                    color: AppColors
-                        .lightTextSecondary,
-                    fontSize: 9,
-                  ),
-                ),
-
-                const SizedBox(
-                  height: 10,
-                ),
-
-                SizedBox(
-                  height: 30,
-                  child: ElevatedButton(
-                    onPressed:
-                    homeController
-                        .loadDashboard,
-                    style:
-                    ElevatedButton
-                        .styleFrom(
-                      backgroundColor:
-                      AppColors
-                          .lightPrimary,
-                      foregroundColor:
-                      Colors.white,
-                    ),
-                    child: const Text(
-                      'Retry',
-                      style: TextStyle(
-                        fontSize: 8,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-
-        final selectedStatus =
-            bookingsController
-                .selectedStatus.value;
-
-        return Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _statCard(
-                    title: 'TOTAL',
-                    value:
-                    '${homeController.totalBookings.value}',
-                    subtitle: 'all reservations',
-                    icon: Icons.inbox_outlined,
-                    iconColor:
-                    AppColors.lightPrimary,
-                    iconBg:
-                    AppColors.softPurple,
-                    selected:
-                    selectedStatus ==
-                        'All Status',
-                    onTap: () {
-                      _applyDashboardStatFilter(
-                        'All Status',
-                      );
-                    },
-                  ),
-                ),
-
-                const SizedBox(width: 8),
-
-                Expanded(
-                  child: _statCard(
-                    title: 'PENDING',
-                    value:
-                    '${homeController.pendingBookings.value}',
-                    subtitle:
-                    'awaiting confirmation',
-                    icon:
-                    Icons.access_time_rounded,
-                    iconColor:
-                    AppColors.dashboardOrange,
-                    iconBg:
-                    AppColors.softOrange,
-                    selected:
-                    selectedStatus ==
-                        'Pending',
-                    onTap: () {
-                      _applyDashboardStatFilter(
-                        'Pending',
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 8),
-
-            Row(
-              children: [
-                Expanded(
-                  child: _statCard(
-                    title: 'CONFIRMED',
-                    value:
-                    '${homeController.confirmedBookings.value}',
-                    subtitle:
-                    'approved reservations',
-                    icon:
-                    Icons.check_circle_outline,
-                    iconColor:
-                    AppColors.dashboardBlue,
-                    iconBg:
-                    AppColors.softBlue,
-                    selected:
-                    selectedStatus ==
-                        'Confirmed',
-                    onTap: () {
-                      _applyDashboardStatFilter(
-                        'Confirmed',
-                      );
-                    },
-                  ),
-                ),
-
-                const SizedBox(width: 8),
-
-                Expanded(
-                  child: _statCard(
-                    title: 'ACTIVE',
-                    value:
-                    '${homeController.activeBookings.value}',
-                    subtitle:
-                    'active & confirmed',
-                    icon: Icons.home_outlined,
-                    iconColor:
-                    AppColors.dashboardGreen,
-                    iconBg:
-                    AppColors.softGreen,
-                    selected:
-                    selectedStatus ==
-                        'Active',
-                    onTap: () {
-                      _applyDashboardStatFilter(
-                        'Active',
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 8),
-
-            Row(
-              children: [
-                Expanded(
-                  child: _statCard(
-                    title: 'COMPLETED',
-                    value:
-                    '${homeController.completedBookings.value}',
-                    subtitle:
-                    'completed reservations',
-                    icon:
-                    Icons.check_circle_outline,
-                    iconColor:
-                    AppColors.dashboardPurple,
-                    iconBg:
-                    AppColors.softPurple,
-                    selected:
-                    selectedStatus ==
-                        'Completed',
-                    onTap: () {
-                      _applyDashboardStatFilter(
-                        'Completed',
-                      );
-                    },
-                  ),
-                ),
-
-                const SizedBox(width: 8),
-
-                Expanded(
-                  child: _statCard(
-                    title: 'CANCELLED',
-                    value:
-                    '${homeController.cancelledBookings.value}',
-                    subtitle:
-                    'cancelled reservations',
-                    icon:
-                    Icons.cancel_outlined,
-                    iconColor:
-                    AppColors.dashboardRed,
-                    iconBg:
-                    AppColors.softRed,
-                    selected:
-                    selectedStatus ==
-                        'Cancelled',
-                    onTap: () {
-                      _applyDashboardStatFilter(
-                        'Cancelled',
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _statCard({
-    required String title,
-    required String value,
-    required String subtitle,
-    required IconData icon,
-    required Color iconColor,
-    required Color iconBg,
-    required bool selected,
-    required VoidCallback onTap,
+  Widget _chip({
+    required String label,
+    required Color bg,
+    required Color textColor,
   }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius:
-      BorderRadius.circular(12),
-      child: AnimatedContainer(
-        duration:
-        const Duration(
-          milliseconds: 180,
-        ),
-        padding:
-        const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: selected
-              ? iconBg
-              : AppColors.lightSurface,
-          borderRadius:
-          BorderRadius.circular(12),
-          border: Border.all(
-            color: selected
-                ? iconColor
-                : AppColors.lightBorder,
-            width: selected ? 1.5 : 1,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment:
-          CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      color: selected
-                          ? iconColor
-                          : AppColors
-                          .lightTextSecondary,
-                      fontSize: 10,
-                      fontWeight:
-                      FontWeight.w700,
-                    ),
-                  ),
-                ),
-
-                Container(
-                  width: 22,
-                  height: 22,
-                  decoration: BoxDecoration(
-                    color: iconBg,
-                    borderRadius:
-                    BorderRadius.circular(
-                      7,
-                    ),
-                  ),
-                  child: Icon(
-                    icon,
-                    color: iconColor,
-                    size: 13,
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 5),
-
-            Text(
-              value,
-              style: const TextStyle(
-                color: AppColors
-                    .lightTextPrimary,
-                fontSize: 18,
-                fontWeight:
-                FontWeight.w800,
-              ),
-            ),
-
-            const SizedBox(height: 1),
-
-            Text(
-              subtitle,
-              maxLines: 1,
-              overflow:
-              TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppColors
-                    .lightTextSecondary,
-                fontSize: 10,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // SPACES HEADER
-  // ============================================================
-
-  // Widget _buildSpacesHeader() {
-  //   return Obx(
-  //         () {
-  //       final count =
-  //           spacesController.filteredSpaces.length;
-  //
-  //       return Row(
-  //         children: [
-  //           Container(
-  //             width: 34,
-  //             height: 34,
-  //             alignment: Alignment.center,
-  //             decoration: BoxDecoration(
-  //               color: AppColors.softPurple,
-  //               borderRadius: BorderRadius.circular(9),
-  //             ),
-  //             child: const Icon(
-  //               Icons.business_center_outlined,
-  //               color: AppColors.lightPrimary,
-  //               size: 18,
-  //             ),
-  //           ),
-  //
-  //           const SizedBox(width: 10),
-  //
-  //           Expanded(
-  //             child: Column(
-  //               crossAxisAlignment: CrossAxisAlignment.start,
-  //               children: [
-  //                 const Text(
-  //                   'Available Spaces',
-  //                   style: TextStyle(
-  //                     color: AppColors.lightTextPrimary,
-  //                     fontSize: 15,
-  //                     fontWeight: FontWeight.w700,
-  //                   ),
-  //                 ),
-  //
-  //                 const SizedBox(height: 2),
-  //
-  //                 Text(
-  //                   '$count spaces available',
-  //                   style: const TextStyle(
-  //                     color: AppColors.lightTextSecondary,
-  //                     fontSize: 9,
-  //                   ),
-  //                 ),
-  //               ],
-  //             ),
-  //           ),
-  //
-  //           TextButton(
-  //             onPressed: () {
-  //               // Spaces is bottom-navigation tab.
-  //               // Keep this available if NavigationController
-  //               // is later used to switch tabs directly.
-  //             },
-  //             child: const Text(
-  //               'Explore',
-  //               style: TextStyle(
-  //                 color: AppColors.lightPrimary,
-  //                 fontSize: 10,
-  //                 fontWeight: FontWeight.w700,
-  //               ),
-  //             ),
-  //           ),
-  //         ],
-  //       );
-  //     },
-  //   );
-  // }
-
-  // ============================================================
-  // SEARCH
-  // ============================================================
-
-  // Widget _buildSpaceSearch() {
-  //   return SizedBox(
-  //     height: 42,
-  //     child: TextField(
-  //       controller:
-  //       spacesController.searchController,
-  //       cursorColor: AppColors.lightPrimary,
-  //       style: const TextStyle(
-  //         color: AppColors.lightTextPrimary,
-  //         fontSize: 11,
-  //       ),
-  //       decoration: InputDecoration(
-  //         hintText:
-  //         'Search spaces by name, location...',
-  //         hintStyle: const TextStyle(
-  //           color: AppColors.lightTextSecondary,
-  //           fontSize: 10,
-  //         ),
-  //         prefixIcon: const Icon(
-  //           Icons.search_rounded,
-  //           color: AppColors.lightTextSecondary,
-  //           size: 18,
-  //         ),
-  //         filled: true,
-  //         fillColor: AppColors.lightSurface,
-  //         isDense: true,
-  //         contentPadding:
-  //         const EdgeInsets.symmetric(
-  //           horizontal: 12,
-  //           vertical: 10,
-  //         ),
-  //         enabledBorder: OutlineInputBorder(
-  //           borderRadius:
-  //           BorderRadius.circular(11),
-  //           borderSide: const BorderSide(
-  //             color: AppColors.lightBorder,
-  //           ),
-  //         ),
-  //         focusedBorder: OutlineInputBorder(
-  //           borderRadius:
-  //           BorderRadius.circular(11),
-  //           borderSide: const BorderSide(
-  //             color: AppColors.lightPrimary,
-  //           ),
-  //         ),
-  //       ),
-  //     ),
-  //   );
-  // }
-
-  // ============================================================
-  // CATEGORY FILTER
-  // ============================================================
-
-  // Widget _buildCategoryFilters() {
-  //   return Obx(
-  //         () {
-  //       final selected =
-  //           spacesController.selectedCategory.value;
-  //
-  //       return SingleChildScrollView(
-  //         scrollDirection: Axis.horizontal,
-  //         child: Row(
-  //           children: [
-  //             _filterChip(
-  //               text: 'Co-Working',
-  //               selected:
-  //               selected == 'Co-Working',
-  //               onTap: () {
-  //                 spacesController.changeCategory(
-  //                   'Co-Working',
-  //                 );
-  //               },
-  //             ),
-  //
-  //             const SizedBox(width: 7),
-  //
-  //             _filterChip(
-  //               text: 'Medical Chambers',
-  //               selected:
-  //               selected == 'Medical Chambers',
-  //               onTap: () {
-  //                 spacesController.changeCategory(
-  //                   'Medical Chambers',
-  //                 );
-  //               },
-  //             ),
-  //
-  //             const SizedBox(width: 7),
-  //
-  //             _filterChip(
-  //               text: 'Private Offices',
-  //               selected:
-  //               selected == 'Private Offices',
-  //               onTap: () {
-  //                 spacesController.changeCategory(
-  //                   'Private Offices',
-  //                 );
-  //               },
-  //             ),
-  //
-  //             const SizedBox(width: 7),
-  //
-  //             _filterChip(
-  //               text: 'Meeting Rooms',
-  //               selected:
-  //               selected == 'Meeting Rooms',
-  //               onTap: () {
-  //                 spacesController.changeCategory(
-  //                   'Meeting Rooms',
-  //                 );
-  //               },
-  //             ),
-  //           ],
-  //         ),
-  //       );
-  //     },
-  //   );
-  // }
-
-  // ============================================================
-  // CABIN TYPE FILTER
-  // ============================================================
-
-  // Widget _buildCabinTypeFilters() {
-  //   return Obx(
-  //         () {
-  //       final selected =
-  //           spacesController.selectedCabinType.value;
-  //
-  //       return Row(
-  //         children: [
-  //           Expanded(
-  //             child: _filterChip(
-  //               text: 'All Cabin Types',
-  //               selected:
-  //               selected == 'All Cabin Types',
-  //               onTap: () {
-  //                 spacesController.changeCabinType(
-  //                   'All Cabin Types',
-  //                 );
-  //               },
-  //             ),
-  //           ),
-  //
-  //           const SizedBox(width: 7),
-  //
-  //           Expanded(
-  //             child: _filterChip(
-  //               text: 'Normal',
-  //               selected:
-  //               selected == 'Normal',
-  //               onTap: () {
-  //                 spacesController.changeCabinType(
-  //                   'Normal',
-  //                 );
-  //               },
-  //             ),
-  //           ),
-  //
-  //           const SizedBox(width: 7),
-  //
-  //           Expanded(
-  //             child: _filterChip(
-  //               text: 'Exclusive',
-  //               selected:
-  //               selected == 'Exclusive',
-  //               onTap: () {
-  //                 spacesController.changeCabinType(
-  //                   'Exclusive',
-  //                 );
-  //               },
-  //             ),
-  //           ),
-  //         ],
-  //       );
-  //     },
-  //   );
-  // }
-
-  // Widget _filterChip({
-  //   required String text,
-  //   required bool selected,
-  //   required VoidCallback onTap,
-  // }) {
-  //   return InkWell(
-  //     onTap: onTap,
-  //     borderRadius: BorderRadius.circular(20),
-  //     child: Container(
-  //       height: 32,
-  //       alignment: Alignment.center,
-  //       padding: const EdgeInsets.symmetric(
-  //         horizontal: 10,
-  //       ),
-  //       decoration: BoxDecoration(
-  //         color: selected
-  //             ? AppColors.lightPrimary
-  //             : AppColors.lightSurface,
-  //         borderRadius: BorderRadius.circular(20),
-  //         border: Border.all(
-  //           color: selected
-  //               ? AppColors.lightPrimary
-  //               : AppColors.lightBorder,
-  //         ),
-  //       ),
-  //       child: Text(
-  //         text,
-  //         maxLines: 1,
-  //         overflow: TextOverflow.ellipsis,
-  //         style: TextStyle(
-  //           color: selected
-  //               ? Colors.white
-  //               : AppColors.lightTextPrimary,
-  //           fontSize: 8,
-  //           fontWeight: FontWeight.w600,
-  //         ),
-  //       ),
-  //     ),
-  //   );
-  // }
-
-  // ============================================================
-  // REAL SPACES API LIST
-  // ============================================================
-
-  // Widget _buildSpacesList() {
-  //   return Obx(
-  //         () {
-  //       if (spacesController.isLoading.value &&
-  //           spacesController.spaces.isEmpty) {
-  //         return const Padding(
-  //           padding: EdgeInsets.symmetric(
-  //             vertical: 40,
-  //           ),
-  //           child: Center(
-  //             child: CircularProgressIndicator(
-  //               color: AppColors.lightPrimary,
-  //             ),
-  //           ),
-  //         );
-  //       }
-  //
-  //       if (spacesController
-  //           .errorMessage.value !=
-  //           null &&
-  //           spacesController.spaces.isEmpty) {
-  //         return _buildErrorState();
-  //       }
-  //
-  //       final spaces =
-  //           spacesController.filteredSpaces;
-  //
-  //       if (spaces.isEmpty) {
-  //         return _buildEmptyState();
-  //       }
-  //
-  //       return Column(
-  //         children: spaces
-  //             .map(
-  //               (space) => Padding(
-  //             padding:
-  //             const EdgeInsets.only(
-  //               bottom: 10,
-  //             ),
-  //             child:
-  //             _buildDashboardSpaceCard(
-  //               space,
-  //             ),
-  //           ),
-  //         )
-  //             .toList(),
-  //       );
-  //     },
-  //   );
-  // }
-
-  // ============================================================
-  // SPACE CARD
-  // ============================================================
-
-  // Widget _buildDashboardSpaceCard(
-  //     SpaceModel space,
-  //     ) {
-  //   final imageUrl =
-  //   space.images.isNotEmpty
-  //       ? _buildMediaUrl(
-  //     space.images.first,
-  //   )
-  //       : '';
-  //
-  //   final category =
-  //   _getCategory(space);
-  //
-  //   return InkWell(
-  //     onTap: () {
-  //       Get.toNamed(
-  //         AppRoutes.spaceDetails,
-  //         arguments: space,
-  //       );
-  //     },
-  //     borderRadius:
-  //     BorderRadius.circular(13),
-  //     child: Container(
-  //       clipBehavior: Clip.antiAlias,
-  //       decoration: BoxDecoration(
-  //         color: AppColors.lightSurface,
-  //         borderRadius:
-  //         BorderRadius.circular(13),
-  //         border: Border.all(
-  //           color: AppColors.lightBorder,
-  //         ),
-  //       ),
-  //       child: Row(
-  //         crossAxisAlignment:
-  //         CrossAxisAlignment.start,
-  //         children: [
-  //           SizedBox(
-  //             width: 105,
-  //             height: 120,
-  //             child: Stack(
-  //               fit: StackFit.expand,
-  //               children: [
-  //                 if (imageUrl.isNotEmpty)
-  //                   Image.network(
-  //                     imageUrl,
-  //                     fit: BoxFit.cover,
-  //                     errorBuilder:
-  //                         (_, __, ___) {
-  //                       return _spacePlaceholder();
-  //                     },
-  //                   )
-  //                 else
-  //                   _spacePlaceholder(),
-  //
-  //                 Positioned(
-  //                   left: 6,
-  //                   top: 6,
-  //                   child: Container(
-  //                     padding:
-  //                     const EdgeInsets.symmetric(
-  //                       horizontal: 6,
-  //                       vertical: 3,
-  //                     ),
-  //                     decoration:
-  //                     BoxDecoration(
-  //                       color: Colors.white,
-  //                       borderRadius:
-  //                       BorderRadius.circular(
-  //                         12,
-  //                       ),
-  //                     ),
-  //                     child: Text(
-  //                       category,
-  //                       style: TextStyle(
-  //                         color: space.isChamber
-  //                             ? AppColors
-  //                             .dashboardRed
-  //                             : AppColors
-  //                             .lightPrimary,
-  //                         fontSize: 6,
-  //                         fontWeight:
-  //                         FontWeight.w700,
-  //                       ),
-  //                     ),
-  //                   ),
-  //                 ),
-  //               ],
-  //             ),
-  //           ),
-  //
-  //           Expanded(
-  //             child: Padding(
-  //               padding:
-  //               const EdgeInsets.all(10),
-  //               child: Column(
-  //                 crossAxisAlignment:
-  //                 CrossAxisAlignment.start,
-  //                 children: [
-  //                   Text(
-  //                     space.name,
-  //                     maxLines: 1,
-  //                     overflow:
-  //                     TextOverflow.ellipsis,
-  //                     style: const TextStyle(
-  //                       color: AppColors
-  //                           .lightTextPrimary,
-  //                       fontSize: 11,
-  //                       fontWeight:
-  //                       FontWeight.w700,
-  //                     ),
-  //                   ),
-  //
-  //                   const SizedBox(height: 5),
-  //
-  //                   Row(
-  //                     children: [
-  //                       const Icon(
-  //                         Icons
-  //                             .location_on_outlined,
-  //                         size: 11,
-  //                         color: AppColors
-  //                             .lightTextSecondary,
-  //                       ),
-  //
-  //                       const SizedBox(width: 3),
-  //
-  //                       Expanded(
-  //                         child: Text(
-  //                           space.address,
-  //                           maxLines: 1,
-  //                           overflow:
-  //                           TextOverflow
-  //                               .ellipsis,
-  //                           style:
-  //                           const TextStyle(
-  //                             color: AppColors
-  //                                 .lightTextSecondary,
-  //                             fontSize: 8,
-  //                           ),
-  //                         ),
-  //                       ),
-  //                     ],
-  //                   ),
-  //
-  //                   const SizedBox(height: 4),
-  //
-  //                   Row(
-  //                     children: [
-  //                       const Icon(
-  //                         Icons
-  //                             .access_time_outlined,
-  //                         size: 11,
-  //                         color: AppColors
-  //                             .lightTextSecondary,
-  //                       ),
-  //
-  //                       const SizedBox(width: 3),
-  //
-  //                       Expanded(
-  //                         child: Text(
-  //                           space.timing,
-  //                           style:
-  //                           const TextStyle(
-  //                             color: AppColors
-  //                                 .lightTextSecondary,
-  //                             fontSize: 8,
-  //                           ),
-  //                         ),
-  //                       ),
-  //                     ],
-  //                   ),
-  //
-  //                   const SizedBox(height: 5),
-  //
-  //                   Row(
-  //                     children: [
-  //                       const Icon(
-  //                         Icons
-  //                             .person_outline_rounded,
-  //                         size: 11,
-  //                         color: AppColors
-  //                             .lightTextSecondary,
-  //                       ),
-  //
-  //                       const SizedBox(width: 3),
-  //
-  //                       Text(
-  //                         '${space.seatCount} seats',
-  //                         style:
-  //                         const TextStyle(
-  //                           color: AppColors
-  //                               .lightTextSecondary,
-  //                           fontSize: 8,
-  //                         ),
-  //                       ),
-  //                     ],
-  //                   ),
-  //
-  //                   const SizedBox(height: 7),
-  //
-  //                   Row(
-  //                     children: [
-  //                       Expanded(
-  //                         child: Text(
-  //                           '${_formatPrice(space.price)}/hour',
-  //                           style:
-  //                           const TextStyle(
-  //                             color: AppColors
-  //                                 .lightPrimary,
-  //                             fontSize: 11,
-  //                             fontWeight:
-  //                             FontWeight.w800,
-  //                           ),
-  //                         ),
-  //                       ),
-  //
-  //                       Container(
-  //                         height: 26,
-  //                         padding:
-  //                         const EdgeInsets
-  //                             .symmetric(
-  //                           horizontal: 9,
-  //                         ),
-  //                         alignment:
-  //                         Alignment.center,
-  //                         decoration:
-  //                         BoxDecoration(
-  //                           color: AppColors
-  //                               .lightPrimary,
-  //                           borderRadius:
-  //                           BorderRadius
-  //                               .circular(
-  //                             7,
-  //                           ),
-  //                         ),
-  //                         child: const Text(
-  //                           'View',
-  //                           style: TextStyle(
-  //                             color:
-  //                             Colors.white,
-  //                             fontSize: 8,
-  //                             fontWeight:
-  //                             FontWeight.w700,
-  //                           ),
-  //                         ),
-  //                       ),
-  //                     ],
-  //                   ),
-  //                 ],
-  //               ),
-  //             ),
-  //           ),
-  //         ],
-  //       ),
-  //     ),
-  //   );
-  // }
-
-  // ============================================================
-  // ERROR
-  // ============================================================
-
-  // Widget _buildErrorState() {
-  //   return Container(
-  //     width: double.infinity,
-  //     padding: const EdgeInsets.symmetric(
-  //       vertical: 30,
-  //       horizontal: 20,
-  //     ),
-  //     decoration: BoxDecoration(
-  //       color: AppColors.lightSurface,
-  //       borderRadius: BorderRadius.circular(12),
-  //       border: Border.all(
-  //         color: AppColors.lightBorder,
-  //       ),
-  //     ),
-  //     child: Column(
-  //       children: [
-  //         const Icon(
-  //           Icons.cloud_off_outlined,
-  //           color: AppColors.dashboardRed,
-  //           size: 30,
-  //         ),
-  //
-  //         const SizedBox(height: 8),
-  //
-  //         const Text(
-  //           'Unable to load spaces',
-  //           style: TextStyle(
-  //             color: AppColors.lightTextPrimary,
-  //             fontSize: 11,
-  //             fontWeight: FontWeight.w700,
-  //           ),
-  //         ),
-  //
-  //         const SizedBox(height: 5),
-  //
-  //         Text(
-  //           spacesController.errorMessage.value ??
-  //               'Please try again.',
-  //           textAlign: TextAlign.center,
-  //           style: const TextStyle(
-  //             color: AppColors.lightTextSecondary,
-  //             fontSize: 8,
-  //           ),
-  //         ),
-  //
-  //         const SizedBox(height: 12),
-  //
-  //         SizedBox(
-  //           height: 30,
-  //           child: ElevatedButton(
-  //             onPressed:
-  //             spacesController.getSpaces,
-  //             style: ElevatedButton.styleFrom(
-  //               backgroundColor:
-  //               AppColors.lightPrimary,
-  //               foregroundColor: Colors.white,
-  //             ),
-  //             child: const Text(
-  //               'Retry',
-  //               style: TextStyle(
-  //                 fontSize: 8,
-  //               ),
-  //             ),
-  //           ),
-  //         ),
-  //       ],
-  //     ),
-  //   );
-  // }
-
-  // ============================================================
-  // EMPTY
-  // ============================================================
-
-  Widget _buildEmptyState() {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        vertical: 30,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4.5),
       decoration: BoxDecoration(
-        color: AppColors.lightSurface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.lightBorder,
+        color: bg,
+        borderRadius: BorderRadius.circular(7.5),
+      ),
+      child: Text(
+        label,
+        style: _roboto(
+          size: 10.5,
+          color: textColor,
+          weight: FontWeight.w700,
         ),
       ),
-      child: const Column(
-        children: [
-          Icon(
-            Icons.search_off_rounded,
-            color:
-            AppColors.lightTextSecondary,
-            size: 30,
-          ),
-
-          SizedBox(height: 8),
-
-          Text(
-            'No spaces found',
-            style: TextStyle(
-              color: AppColors.lightTextPrimary,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-
-          SizedBox(height: 4),
-
-          Text(
-            'Try changing your search or filters.',
-            style: TextStyle(
-              color:
-              AppColors.lightTextSecondary,
-              fontSize: 8,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
-  // ============================================================
-  // HELPERS
-  // ============================================================
-
-  Widget _spacePlaceholder() {
-    return Container(
-      color: AppColors.softPurple,
-      alignment: Alignment.center,
-      child: const Icon(
-        Icons.image_not_supported_outlined,
-        color: AppColors.lightPrimary,
-        size: 28,
-      ),
-    );
-  }
-
-  String _buildMediaUrl(
-      String path,
-      ) {
-    final value = path.trim();
-
-    if (value.isEmpty) {
-      return '';
-    }
-
-    if (value.startsWith('http://') ||
-        value.startsWith('https://')) {
-      return value;
-    }
-
-    final normalized =
-    value.replaceAll(
-      '\\',
-      '/',
-    );
-
-    return 'https://spaceapi.iryax.com/$normalized';
-  }
-
-  String _formatPrice(
-      double price,
-      ) {
-    if (price % 1 == 0) {
-      return '₹${price.toInt()}';
-    }
-
-    return '₹${price.toStringAsFixed(2)}';
-  }
-
-  String _getCategory(
-      SpaceModel space,
-      ) {
-    if (space.isChamber) {
-      return 'Medical';
-    }
-
-    if (space.isCafe) {
-      return 'Cafe';
-    }
-
-    if (space.isExclusive) {
-      return 'Private';
-    }
-
-    return 'Co-Working';
-  }
 }

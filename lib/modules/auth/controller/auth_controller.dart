@@ -7,6 +7,7 @@ import 'package:iryax_spaces/core/services/storage_service.dart';
 import '../../../app/routes/app_routes.dart';
 import '../model/account_type.dart';
 import '../service/auth_service.dart';
+import '../widget/login_success_dialog.dart';
 
 class AuthController extends GetxController {
   final AuthService _authService =
@@ -288,18 +289,26 @@ class AuthController extends GetxController {
         response.user.isDoctor,
       );
 
-      Get.offAllNamed(
-        AppRoutes.dashboard,
+      isLoginLoading.value = false;
+
+      await LoginSuccessDialog.show(
+        userName: response.user.name,
+        role: response.user.role,
+        onComplete: () {
+          Get.offAllNamed(
+            AppRoutes.dashboard,
+          );
+        },
       );
     } catch (e) {
+      isLoginLoading.value = false;
+
       Get.snackbar(
         'Login Failed',
         _cleanError(e),
         snackPosition:
         SnackPosition.BOTTOM,
       );
-    } finally {
-      isLoginLoading.value = false;
     }
   }
 

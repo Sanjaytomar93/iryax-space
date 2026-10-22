@@ -13,12 +13,21 @@ class SplashController extends GetxController {
 
   Future<void> _handleStartup() async {
     await Future.delayed(
-      const Duration(milliseconds: 700),
+      const Duration(milliseconds: 1200),
     );
 
-    if (StorageService.isLoggedIn) {
+    // Require both flag + token so a restored/partial session can't skip login.
+    final hasValidSession =
+        StorageService.isLoggedIn && StorageService.token.isNotEmpty;
+
+    if (hasValidSession) {
       Get.offAllNamed(AppRoutes.dashboard);
       return;
+    }
+
+    // Stale / restored session without a token — wipe and go to login.
+    if (StorageService.isLoggedIn || StorageService.token.isNotEmpty) {
+      await StorageService.clearAll();
     }
 
     if (StorageService.registrationInProgress) {
