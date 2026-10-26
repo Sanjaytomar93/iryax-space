@@ -137,7 +137,7 @@ class SpaceModel {
       )
           .toList(),
 
-      seats: _parseSeats(json['seats'], parsedCapacity),
+      seats: _parseSeats(json['seats']),
 
       pricingPlans:
       (json['pricingPlans'] as List? ?? [])
@@ -158,7 +158,7 @@ class SpaceModel {
     );
   }
 
-  static List<SeatModel> _parseSeats(dynamic rawSeats, int capacity) {
+  static List<SeatModel> _parseSeats(dynamic rawSeats) {
     final list = <SeatModel>[];
 
     if (rawSeats is List && rawSeats.isNotEmpty) {
@@ -187,17 +187,6 @@ class SpaceModel {
       }
     }
 
-    // Fallback: If no explicit seat items found in backend data but capacity > 0, generate seats
-    if (list.isEmpty && capacity > 0) {
-      for (var i = 1; i <= capacity; i++) {
-        list.add(SeatModel(
-          id: '$i',
-          name: '$i',
-          number: i,
-        ));
-      }
-    }
-
     return list;
   }
 
@@ -205,8 +194,7 @@ class SpaceModel {
       isChamber;
 
   bool get isCoworking {
-    return !isChamber ||
-        type?.toLowerCase() == 'coworking';
+    return !isChamber && !isCafe && !isExclusive;
   }
 
   bool get isExclusive =>
@@ -221,23 +209,7 @@ class SpaceModel {
     return capacity;
   }
 
-  List<SeatModel> get effectiveSeats {
-    if (seats.isNotEmpty) {
-      return seats;
-    }
-    final count = seatCount > 0 ? seatCount : capacity;
-    if (count > 0) {
-      return List.generate(
-        count,
-        (i) => SeatModel(
-          id: '${i + 1}',
-          name: '${i + 1}',
-          number: i + 1,
-        ),
-      );
-    }
-    return [];
-  }
+  List<SeatModel> get effectiveSeats => seats;
 
   String get timing {
     if (is24x7) {

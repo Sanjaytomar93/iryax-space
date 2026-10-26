@@ -26,10 +26,10 @@ class SplashView extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color(0xFF0F0D24),
-              Color(0xFF141033),
-              Color(0xFF1C1748),
-              Color(0xFF0D0B1F),
+              Color(0xFF1A1635),
+              Color(0xFF26204A),
+              Color(0xFF3D3568),
+              Color(0xFF1F1A3D),
             ],
             stops: [0.0, 0.35, 0.7, 1.0],
           ),
@@ -64,7 +64,7 @@ class SplashView extends StatelessWidget {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF5B4FE9).withValues(alpha: 0.28),
+                            color: const Color(0xFF26204A).withValues(alpha: 0.28),
                             blurRadius: 55,
                             spreadRadius: 10,
                           ),
@@ -81,12 +81,12 @@ class SplashView extends StatelessWidget {
                         color: const Color(0xFF221C4A).withValues(alpha: 0.8),
                         borderRadius: BorderRadius.circular(26),
                         border: Border.all(
-                          color: const Color(0xFF5B4FE9).withValues(alpha: 0.35),
+                          color: const Color(0xFF26204A).withValues(alpha: 0.35),
                           width: 1.5,
                         ),
                         boxShadow: const [
                           BoxShadow(
-                            color: Color(0x35000000),
+                            color: Color(0x3526204A),
                             blurRadius: 20,
                             offset: Offset(0, 10),
                           ),
@@ -123,8 +123,8 @@ class SplashView extends StatelessWidget {
                     borderRadius: BorderRadius.circular(2),
                     gradient: const LinearGradient(
                       colors: [
-                        Color(0xFF5B4FE9),
-                        Color(0xFF32D6A5),
+                        Color(0xFF26204A),
+                        Color(0xFF3D3568),
                       ],
                     ),
                   ),
@@ -153,7 +153,7 @@ class SplashView extends StatelessWidget {
                   child: CircularProgressIndicator(
                     strokeWidth: 2.2,
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      Color(0xFF5B4FE9),
+                      Color(0xFF26204A),
                     ),
                   ),
                 ),

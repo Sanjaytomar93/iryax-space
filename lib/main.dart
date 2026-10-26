@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 
@@ -27,6 +28,21 @@ class IryaxSpaceApp extends StatelessWidget {
       title: 'IRYAX Space',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
+      builder: (context, child) {
+        return GestureDetector(
+          onTap: () {
+            FocusManager.instance.primaryFocus?.unfocus();
+            SystemChannels.textInput.invokeMethod('TextInput.hide');
+          },
+          behavior: HitTestBehavior.translucent,
+          child: MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: TextScaler.noScaling,
+            ),
+            child: child!,
+          ),
+        );
+      },
 
       // Always start with Splash.
       // Splash will decide:

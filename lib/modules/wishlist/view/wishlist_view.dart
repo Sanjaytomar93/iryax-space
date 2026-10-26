@@ -3,7 +3,10 @@ import 'package:get/get.dart';
 
 import 'package:iryax_spaces/app/routes/app_routes.dart';
 import 'package:iryax_spaces/app/themes/app_colors.dart';
+import 'package:iryax_spaces/core/widgets/app_shimmer.dart';
+import 'package:iryax_spaces/core/widgets/notification_bell_button.dart';
 import 'package:iryax_spaces/modules/spaces/model/space_model.dart';
+import 'package:iryax_spaces/modules/spaces/widget/space_listing_card.dart';
 import 'package:iryax_spaces/modules/wishlist/controller/wishlist_controller.dart';
 
 class WishlistView extends GetView<WishlistController> {
@@ -11,100 +14,73 @@ class WishlistView extends GetView<WishlistController> {
     super.key,
   });
 
+  static const _navy = Color(0xFF26204A);
+
   @override
   Widget build(BuildContext context) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       controller.ensureLoaded();
     });
 
-    return ColoredBox(
-      color: AppColors.lightBackground,
-      child: ListView(
-        padding: EdgeInsets.zero,
+    return Scaffold(
+      backgroundColor: AppColors.lightBackground,
+      body: Column(
         children: [
-          _buildHeader(),
-
-          Transform.translate(
-            offset: const Offset(0, -14),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14,
-              ),
-              child: Column(
+          _buildHeader(context),
+          Expanded(
+            child: Transform.translate(
+              offset: const Offset(0, -16),
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
                 children: [
                   _buildSummaryCard(),
-
                   const SizedBox(height: 14),
+                  Obx(() {
+                    if (controller.isLoading.value &&
+                        controller.items.isEmpty) {
+                      return const SpaceListShimmer();
+                    }
 
-                  Obx(
-                        () {
-                      if (controller.isLoading.value &&
-                          controller.items.isEmpty) {
-                        return const Padding(
-                          padding: EdgeInsets.symmetric(
-                            vertical: 50,
-                          ),
-                          child: Center(
-                            child: CircularProgressIndicator(
-                              color: AppColors.lightPrimary,
+                    if (controller.errorMessage.value.isNotEmpty &&
+                        controller.items.isEmpty) {
+                      return _buildErrorState();
+                    }
+
+                    final items = controller.filteredItems;
+
+                    if (controller.items.isEmpty) {
+                      return _buildEmptyState();
+                    }
+
+                    if (items.isEmpty) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 35),
+                        child: Center(
+                          child: Text(
+                            'No wishlist items match your search.',
+                            style: TextStyle(
+                              color: AppColors.lightTextSecondary,
+                              fontSize: 12,
                             ),
                           ),
-                        );
-                      }
-
-                      if (controller.errorMessage.value.isNotEmpty &&
-                          controller.items.isEmpty) {
-                        return _buildErrorState();
-                      }
-
-                      final items =
-                          controller.filteredItems;
-
-                      if (controller.items.isEmpty) {
-                        return _buildEmptyState();
-                      }
-
-                      if (items.isEmpty) {
-                        return const Padding(
-                          padding: EdgeInsets.symmetric(
-                            vertical: 35,
-                          ),
-                          child: Center(
-                            child: Text(
-                              'No wishlist items match your search.',
-                              style: TextStyle(
-                                color:
-                                AppColors.lightTextSecondary,
-                                fontSize: 9,
-                              ),
-                            ),
-                          ),
-                        );
-                      }
-
-                      return Column(
-                        children: items
-                            .map(
-                              (item) => Padding(
-                            padding:
-                            const EdgeInsets.only(
-                              bottom: 10,
-                            ),
-                            child:
-                            _buildWishlistCard(
-                              item,
-                            ),
-                          ),
-                        )
-                            .toList(),
+                        ),
                       );
-                    },
-                  ),
+                    }
+
+                    return Column(
+                      children: items
+                          .map(
+                            (item) => Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: _buildWishlistCard(item),
+                            ),
+                          )
+                          .toList(),
+                    );
+                  }),
                   const SizedBox(height: 18),
-
                   _buildFooter(),
-
-                  const SizedBox(height: 75),
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
@@ -114,158 +90,218 @@ class WishlistView extends GetView<WishlistController> {
     );
   }
 
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(
-        16,
-        18,
-        16,
-        38,
-      ),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Color(0xFFEA3F5A),
-            Color(0xFFC91849),
-          ],
-        ),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color:
-                  Colors.white.withValues(
-                    alpha: 0.14,
-                  ),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.arrow_back_rounded,
-                  color: Colors.white,
-                  size: 17,
-                ),
-              ),
+  Widget _buildHeader(BuildContext context) {
+    final top = MediaQuery.paddingOf(context).top;
 
-              const SizedBox(width: 10),
-
-              Container(
-                width: 34,
-                height: 34,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color:
-                  Colors.white.withValues(
-                    alpha: 0.14,
-                  ),
-                  borderRadius:
-                  BorderRadius.circular(9),
-                ),
-                child: const Icon(
-                  Icons.favorite_rounded,
-                  color: Colors.white,
-                  size: 17,
-                ),
-              ),
-
-              const SizedBox(width: 10),
-
-              Expanded(
-                child: Obx(
-                      () => Column(
-                    crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'My Wishlist',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight:
-                          FontWeight.w800,
-                        ),
-                      ),
-                      Text(
-                        '${controller.totalSaved} spaces saved',
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+    return ClipRRect(
+      child: Container(
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF1F1A3D),
+              Color(0xFF26204A),
+              Color(0xFF3D3568),
             ],
           ),
-
-          const SizedBox(height: 18),
-
-          SizedBox(
-            height: 38,
-            child: TextField(
-              controller:
-              controller.searchController,
-              cursorColor: Colors.white,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-              ),
-              decoration: InputDecoration(
-                hintText: 'Search wishlist...',
-                hintStyle: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 10,
-                ),
-                prefixIcon: const Icon(
-                  Icons.search_rounded,
-                  color: Colors.white70,
-                  size: 15,
-                ),
-                prefixIconConstraints:
-                const BoxConstraints(
-                  minWidth: 34,
-                ),
-                filled: true,
-                fillColor:
-                Colors.white.withValues(
-                  alpha: 0.12,
-                ),
-                isDense: true,
-                contentPadding:
-                const EdgeInsets.symmetric(
-                  horizontal: 9,
-                  vertical: 10,
-                ),
-                enabledBorder:
-                OutlineInputBorder(
-                  borderRadius:
-                  BorderRadius.circular(10),
-                  borderSide: BorderSide(
-                    color:
-                    Colors.white.withValues(
-                      alpha: 0.28,
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              right: -50,
+              top: -70,
+              child: IgnorePointer(
+                child: Container(
+                  width: 220,
+                  height: 220,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        const Color(0xFFE85B5B).withValues(alpha: 0.22),
+                        const Color(0xFF3D3568).withValues(alpha: 0.35),
+                        Colors.transparent,
+                      ],
                     ),
-                  ),
-                ),
-                focusedBorder:
-                OutlineInputBorder(
-                  borderRadius:
-                  BorderRadius.circular(10),
-                  borderSide:
-                  const BorderSide(
-                    color: Colors.white,
                   ),
                 ),
               ),
             ),
+            Positioned(
+              left: -40,
+              bottom: -30,
+              child: IgnorePointer(
+                child: Container(
+                  width: 140,
+                  height: 140,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.05),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.fromLTRB(16, top + 10, 16, 36),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      _backButton(),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Obx(
+                          () => Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'My Wishlist',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.2,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                controller.totalSaved == 1
+                                    ? '1 space saved'
+                                    : '${controller.totalSaved} spaces saved',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.72),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w400,
+                                  height: 1.2,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      NotificationBellButton(
+                        onTap: () {
+                          FocusManager.instance.primaryFocus?.unfocus();
+                          Get.toNamed(AppRoutes.notifications);
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.18),
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.favorite_rounded,
+                          color: Color(0xFFFF8A8A),
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Your saved medical & commercial spaces',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.78),
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 42,
+                    child: TextField(
+                      controller: controller.searchController,
+                      cursorColor: Colors.white,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Search wishlist...',
+                        hintStyle: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.55),
+                          fontSize: 12.5,
+                        ),
+                        prefixIcon: Icon(
+                          Icons.search_rounded,
+                          color: Colors.white.withValues(alpha: 0.7),
+                          size: 18,
+                        ),
+                        filled: true,
+                        fillColor: Colors.white.withValues(alpha: 0.12),
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.22),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.55),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _backButton() {
+    return GestureDetector(
+      onTap: Get.back,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: 40,
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: const Color(0xFFEEEDF3),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Container(
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _navy,
+            borderRadius: BorderRadius.circular(9),
           ),
-        ],
+          child: const Icon(
+            Icons.chevron_left_rounded,
+            color: Colors.white,
+            size: 20,
+          ),
+        ),
       ),
     );
   }
@@ -350,7 +386,7 @@ class WishlistView extends GetView<WishlistController> {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black
+              color: const Color(0xFF26204A)
                   .withValues(alpha: 0.025),
               blurRadius: 8,
               offset: const Offset(0, 3),
@@ -489,7 +525,7 @@ class WishlistView extends GetView<WishlistController> {
           value,
           style: TextStyle(
             color: valueColor ??
-                AppColors.dashboardRed,
+                AppColors.lightPrimary,
             fontSize: 20,
             fontWeight: FontWeight.w800,
           ),
@@ -498,440 +534,29 @@ class WishlistView extends GetView<WishlistController> {
     );
   }
 
-  Widget _buildWishlistCard(
-      SpaceModel item,
-      ) {
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: AppColors.lightSurface,
-        borderRadius:
-        BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.lightBorderStrong,
-          width: 1.1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment:
-        CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            height: 145,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Image.network(
-                  item.imageUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder:
-                      (_, __, ___) {
-                    return Container(
-                      color:
-                      AppColors.softPurple,
-                      alignment:
-                      Alignment.center,
-                      child: const Icon(
-                        Icons
-                            .image_not_supported_outlined,
-                        color: AppColors
-                            .lightPrimary,
-                      ),
-                    );
-                  },
-                ),
-
-                Positioned(
-                  left: 8,
-                  top: 8,
-                  child: Container(
-                    padding:
-                    const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration:
-                    BoxDecoration(
-                      color: item.category ==
-                          'Medical Chamber'
-                          ? AppColors.softRed
-                          : Colors.white,
-                      borderRadius:
-                      BorderRadius.circular(
-                        15,
-                      ),
-                    ),
-                    child: Text(
-                      item.category,
-                      style: TextStyle(
-                        color: item.category ==
-                            'Medical Chamber'
-                            ? AppColors
-                            .dashboardRed
-                            : AppColors
-                            .lightTextPrimary,
-                        fontSize: 8.5,
-                        fontWeight:
-                        FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: InkWell(
-                    onTap: () {
-                      controller.removeItem(
-                        item.id,
-                      );
-                    },
-                    child: Container(
-                      width: 28,
-                      height: 28,
-                      alignment:
-                      Alignment.center,
-                      decoration:
-                      const BoxDecoration(
-                        color:
-                        AppColors.dashboardRed,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.delete_outline,
-                        color: Colors.white,
-                        size: 14,
-                      ),
-                    ),
-                  ),
-                ),
-
-                Positioned(
-                  left: 8,
-                  bottom: 8,
-                  child: Container(
-                    padding:
-                    const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 5,
-                    ),
-                    decoration:
-                    BoxDecoration(
-                      color:
-                      AppColors.dashboardRed,
-                      borderRadius:
-                      BorderRadius.circular(
-                        8,
-                      ),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(
-                          Icons.favorite,
-                          color: Colors.white,
-                          size: 10,
-                        ),
-                        SizedBox(width: 4),
-                        Text(
-                          'Saved',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight:
-                            FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                Positioned(
-                  right: 8,
-                  bottom: 8,
-                  child: Container(
-                    padding:
-                    const EdgeInsets.symmetric(
-                      horizontal: 7,
-                      vertical: 4,
-                    ),
-                    decoration:
-                    BoxDecoration(
-                      color: Colors.black
-                          .withValues(
-                        alpha: 0.72,
-                      ),
-                      borderRadius:
-                      BorderRadius.circular(
-                        8,
-                      ),
-                    ),
-                    child: Text(
-                      '${item.price}/hour',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 8.5,
-                        fontWeight:
-                        FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+  Widget _buildWishlistCard(SpaceModel item) {
+    return SpaceListingCard(
+      space: item,
+      showSavedBadge: true,
+      onDoubleTapLike: () => controller.removeItem(item.id),
+      topRightAction: InkWell(
+        onTap: () => controller.removeItem(item.id),
+        child: Container(
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.lightBorder),
           ),
-
-          Padding(
-            padding:
-            const EdgeInsets.fromLTRB(
-              10,
-              9,
-              10,
-              9,
-            ),
-            child: Column(
-              crossAxisAlignment:
-              CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.name,
-                  style: const TextStyle(
-                    color:
-                    AppColors.lightTextPrimary,
-                    fontSize: 12,
-                    fontWeight:
-                    FontWeight.w700,
-                  ),
-                ),
-
-                const SizedBox(height: 5),
-
-                _infoRow(
-                  Icons.location_on_outlined,
-                  item.location,
-                ),
-
-                const SizedBox(height: 4),
-
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.star_rounded,
-                      color: AppColors
-                          .dashboardOrange,
-                      size: 11,
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      '${item.rating}',
-                      style: const TextStyle(
-                        color: AppColors
-                            .lightTextPrimary,
-                        fontSize: 9,
-                        fontWeight:
-                        FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '(${item.reviews} reviews)',
-                      style: const TextStyle(
-                        color: AppColors
-                            .lightTextSecondary,
-                        fontSize: 8.5,
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 7),
-
-                Row(
-                  children: [
-                    _facilityIcon(
-                      Icons.wifi_rounded,
-                    ),
-                    const SizedBox(width: 5),
-                    _facilityIcon(
-                      Icons
-                          .business_center_outlined,
-                    ),
-                    const SizedBox(width: 5),
-                    _facilityIcon(
-                      Icons.lock_outline,
-                    ),
-                    const SizedBox(width: 5),
-                    _facilityIcon(
-                      Icons
-                          .desktop_windows_outlined,
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.only(left: 6),
-                      child: Text(
-                        '+5',
-                        style: TextStyle(
-                          color: AppColors.lightTextSecondary,
-                          fontSize: 8.5,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 7),
-
-                const Divider(
-                  height: 1,
-                  color: AppColors.lightBorder,
-                ),
-
-                const SizedBox(height: 7),
-
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.person_outline,
-                      size: 11,
-                      color: AppColors
-                          .lightTextSecondary,
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        '${item.seatCount} seats',
-                        style: const TextStyle(
-                          color: AppColors.lightTextSecondary,
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-
-                    SizedBox(
-                      height: 28,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          // final space =
-                          // SpaceModel(
-                          //   id: item.id,
-                          //   name: item.name,
-                          //   category:
-                          //   item.category,
-                          //   location:
-                          //   item.location,
-                          //   imageUrl:
-                          //   item.imageUrl,
-                          //   price: item.price,
-                          //   timing:
-                          //   '9:00 AM - 9:00 PM',
-                          //   rating:
-                          //   item.rating,
-                          //   reviews:
-                          //   item.reviews,
-                          //   seats:
-                          //   item.seats,
-                          // );
-                          //
-                          // Get.toNamed(
-                          //   AppRoutes
-                          //       .spaceDetails,
-                          //   arguments: space,
-                          // );
-
-
-                          Get.toNamed(
-                            AppRoutes.spaceDetails,
-                            arguments: item,
-                          );
-                        },
-                        style:
-                        ElevatedButton.styleFrom(
-                          backgroundColor:
-                          AppColors.dashboardRed,
-                          foregroundColor:
-                          Colors.white,
-                          elevation: 0,
-                          padding:
-                          const EdgeInsets
-                              .symmetric(
-                            horizontal: 12,
-                          ),
-                          shape:
-                          RoundedRectangleBorder(
-                            borderRadius:
-                            BorderRadius.circular(
-                              8,
-                            ),
-                          ),
-                        ),
-                        icon: const Icon(
-                          Icons.visibility_outlined,
-                          size: 11,
-                        ),
-                        label: const Text(
-                          'View',
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight:
-                            FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _facilityIcon(
-      IconData icon,
-      ) {
-    return Container(
-      width: 24,
-      height: 24,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: AppColors.lightBackground,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Icon(
-        icon,
-        size: 11,
-        color: AppColors.lightTextSecondary,
-      ),
-    );
-  }
-
-  Widget _infoRow(
-      IconData icon,
-      String text,
-      ) {
-    return Row(
-      children: [
-        Icon(
-          icon,
-          size: 11,
-          color: AppColors.lightTextSecondary,
-        ),
-        const SizedBox(width: 4),
-        Expanded(
-          child: Text(
-            text,
-            style: const TextStyle(
-              color:
-              AppColors.lightTextSecondary,
-              fontSize: 9.5,
-              fontWeight: FontWeight.w500,
-            ),
+          child: const Icon(
+            Icons.delete_outline,
+            color: AppColors.dashboardRed,
+            size: 14,
           ),
         ),
-      ],
+      ),
     );
   }
 
@@ -952,7 +577,7 @@ class WishlistView extends GetView<WishlistController> {
               width: 34,
               height: 34,
               decoration: BoxDecoration(
-                color: AppColors.dashboardRed,
+                color: const Color(0xFF26204A),
                 borderRadius:
                 BorderRadius.circular(9),
               ),

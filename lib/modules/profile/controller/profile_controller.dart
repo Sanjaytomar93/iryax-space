@@ -74,6 +74,32 @@ class ProfileController
         .toUpperCase();
   }
 
+  List<String> get pendingFields {
+    final list = <String>[];
+    final p = profile.value;
+    if (p.name.trim().isEmpty) list.add('Name');
+    if (p.email.trim().isEmpty) list.add('Email');
+    if (p.mobile.trim().isEmpty) list.add('Mobile');
+    if (p.address.trim().isEmpty) list.add('Address');
+    if (p.organization.trim().isEmpty) list.add('Organization');
+    if (p.gstNumber.trim().isEmpty) list.add('GST Number');
+    return list;
+  }
+
+  int get filledFieldsCount {
+    return 6 - pendingFields.length;
+  }
+
+  int get totalFieldsCount => 6;
+
+  int get completionPercent {
+    if (profile.value.id.isEmpty) return 0;
+    final percent = ((filledFieldsCount / totalFieldsCount) * 100).round();
+    return percent.clamp(0, 100);
+  }
+
+  bool get isProfileComplete => completionPercent >= 100;
+
   Future<void> loadProfile() async {
     if (isLoading.value) {
       return;
@@ -88,19 +114,9 @@ class ProfileController
           .getProfile();
 
       profile.value = result;
-
-      debugPrint(
-        'PROFILE LOADED: '
-            '${result.name} / '
-            '${result.email}',
-      );
     } catch (e) {
       errorMessage.value =
           _friendlyError(e);
-
-      debugPrint(
-        'PROFILE ERROR: $e',
-      );
     } finally {
       isLoading.value = false;
     }

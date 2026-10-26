@@ -36,6 +36,37 @@ class AuthController extends GetxController {
       false.obs;
 
   // ============================================================
+  // FORGOT / RESET PASSWORD
+  // ============================================================
+
+  final forgotEmailController =
+  TextEditingController();
+
+  final newPasswordController =
+  TextEditingController();
+
+  final confirmPasswordController =
+  TextEditingController();
+
+  final forgotPasswordFormKey =
+  GlobalKey<FormState>();
+
+  final resetPasswordFormKey =
+  GlobalKey<FormState>();
+
+  final isForgotPasswordLoading =
+      false.obs;
+
+  final isResetPasswordLoading =
+      false.obs;
+
+  final isNewPasswordVisible =
+      false.obs;
+
+  final isConfirmPasswordVisible =
+      false.obs;
+
+  // ============================================================
   // ACCOUNT TYPE
   // ============================================================
 
@@ -239,6 +270,22 @@ class AuthController extends GetxController {
       r'^[6-9]\d{9}$',
     ).hasMatch(text)) {
       return 'Enter a valid 10 digit mobile number';
+    }
+
+    return null;
+  }
+
+  String? validateConfirmPassword(
+      String? value,
+      ) {
+    final text = value ?? '';
+
+    if (text.isEmpty) {
+      return 'Confirm password is required';
+    }
+
+    if (text != newPasswordController.text) {
+      return 'Passwords do not match';
     }
 
     return null;
@@ -456,12 +503,125 @@ class AuthController extends GetxController {
   // ============================================================
 
   void forgotPassword() {
-    Get.snackbar(
-      'Forgot Password',
-      'Forgot password flow will be added later.',
-      snackPosition:
-      SnackPosition.BOTTOM,
+    forgotEmailController.text =
+        emailController.text.trim();
+    newPasswordController.clear();
+    confirmPasswordController.clear();
+    isNewPasswordVisible.value = false;
+    isConfirmPasswordVisible.value = false;
+
+    Get.toNamed(
+      AppRoutes.forgotPassword,
     );
+  }
+
+  void toggleNewPasswordVisibility() {
+    isNewPasswordVisible.value =
+        !isNewPasswordVisible.value;
+  }
+
+  void toggleConfirmPasswordVisibility() {
+    isConfirmPasswordVisible.value =
+        !isConfirmPasswordVisible.value;
+  }
+
+  Future<void> submitForgotPassword() async {
+    final isValid =
+        forgotPasswordFormKey.currentState
+            ?.validate() ??
+            false;
+
+    if (!isValid ||
+        isForgotPasswordLoading.value) {
+      return;
+    }
+
+    try {
+      isForgotPasswordLoading.value = true;
+
+      final message =
+          await _authService.forgotPassword(
+        email:
+            forgotEmailController.text.trim(),
+      );
+
+      isForgotPasswordLoading.value = false;
+
+      Get.snackbar(
+        'Success',
+        message,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+
+      Get.toNamed(
+        AppRoutes.resetPassword,
+      );
+    } catch (e) {
+      isForgotPasswordLoading.value = false;
+
+      Get.snackbar(
+        'Error',
+        e.toString().replaceFirst(
+          'Exception: ',
+          '',
+        ),
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
+  }
+
+  Future<void> submitResetPassword() async {
+    final isValid =
+        resetPasswordFormKey.currentState
+            ?.validate() ??
+            false;
+
+    if (!isValid ||
+        isResetPasswordLoading.value) {
+      return;
+    }
+
+    try {
+      isResetPasswordLoading.value = true;
+
+      final message =
+          await _authService.resetPassword(
+        email:
+            forgotEmailController.text.trim(),
+        newPassword:
+            newPasswordController.text,
+      );
+
+      isResetPasswordLoading.value = false;
+
+      newPasswordController.clear();
+      confirmPasswordController.clear();
+      forgotEmailController.clear();
+
+      Get.snackbar(
+        'Success',
+        message,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+
+      // Pop back to existing Login — offAllNamed recreates LoginView
+      // while the old one is still in the tree (same GlobalKey crash).
+      Get.until(
+        (route) =>
+            route.settings.name == AppRoutes.login,
+      );
+    } catch (e) {
+      isResetPasswordLoading.value = false;
+
+      Get.snackbar(
+        'Error',
+        e.toString().replaceFirst(
+          'Exception: ',
+          '',
+        ),
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
   }
 
   // ============================================================
@@ -788,6 +948,10 @@ class AuthController extends GetxController {
   void onClose() {
     emailController.dispose();
     passwordController.dispose();
+
+    forgotEmailController.dispose();
+    newPasswordController.dispose();
+    confirmPasswordController.dispose();
 
     fullNameController.dispose();
     registerEmailController.dispose();

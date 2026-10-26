@@ -9,6 +9,8 @@ enum BookingStatus {
 enum PaymentStatus {
   pending,
   paid,
+  failed,
+  refunded,
 }
 
 enum PaymentMode {
@@ -43,6 +45,18 @@ class BookingModel {
   final String customerEmail;
   final String customerMobile;
 
+  /// Extra fields for rich details / invoice (Numbers-style sheet).
+  final double totalHours;
+  final int totalDays;
+  final double hourlyRate;
+  final int capacity;
+  final String cabinKind;
+  final double extraCharge;
+  final List<String> selectedSeats;
+  final String transactionId;
+  final String bookingBasis;
+  final String city;
+
   const BookingModel({
     required this.id,
     required this.spaceName,
@@ -63,7 +77,81 @@ class BookingModel {
     required this.customerName,
     required this.customerEmail,
     required this.customerMobile,
+    this.totalHours = 0,
+    this.totalDays = 1,
+    this.hourlyRate = 0,
+    this.capacity = 0,
+    this.cabinKind = 'normal',
+    this.extraCharge = 0,
+    this.selectedSeats = const [],
+    this.transactionId = '',
+    this.bookingBasis = 'hourly',
+    this.city = '',
   });
+
+  BookingModel copyWith({
+    String? id,
+    String? spaceName,
+    String? location,
+    String? spaceType,
+    String? startDate,
+    String? startTime,
+    String? endDate,
+    String? endTime,
+    String? duration,
+    String? days,
+    int? seats,
+    String? amount,
+    String? createdAt,
+    BookingStatus? status,
+    PaymentStatus? paymentStatus,
+    PaymentMode? paymentMode,
+    String? customerName,
+    String? customerEmail,
+    String? customerMobile,
+    double? totalHours,
+    int? totalDays,
+    double? hourlyRate,
+    int? capacity,
+    String? cabinKind,
+    double? extraCharge,
+    List<String>? selectedSeats,
+    String? transactionId,
+    String? bookingBasis,
+    String? city,
+  }) {
+    return BookingModel(
+      id: id ?? this.id,
+      spaceName: spaceName ?? this.spaceName,
+      location: location ?? this.location,
+      spaceType: spaceType ?? this.spaceType,
+      startDate: startDate ?? this.startDate,
+      startTime: startTime ?? this.startTime,
+      endDate: endDate ?? this.endDate,
+      endTime: endTime ?? this.endTime,
+      duration: duration ?? this.duration,
+      days: days ?? this.days,
+      seats: seats ?? this.seats,
+      amount: amount ?? this.amount,
+      createdAt: createdAt ?? this.createdAt,
+      status: status ?? this.status,
+      paymentStatus: paymentStatus ?? this.paymentStatus,
+      paymentMode: paymentMode ?? this.paymentMode,
+      customerName: customerName ?? this.customerName,
+      customerEmail: customerEmail ?? this.customerEmail,
+      customerMobile: customerMobile ?? this.customerMobile,
+      totalHours: totalHours ?? this.totalHours,
+      totalDays: totalDays ?? this.totalDays,
+      hourlyRate: hourlyRate ?? this.hourlyRate,
+      capacity: capacity ?? this.capacity,
+      cabinKind: cabinKind ?? this.cabinKind,
+      extraCharge: extraCharge ?? this.extraCharge,
+      selectedSeats: selectedSeats ?? this.selectedSeats,
+      transactionId: transactionId ?? this.transactionId,
+      bookingBasis: bookingBasis ?? this.bookingBasis,
+      city: city ?? this.city,
+    );
+  }
 
   factory BookingModel.fromJson(
       Map<String, dynamic> json,
@@ -73,9 +161,6 @@ class BookingModel {
     final cabin = cabinRaw is Map
         ? Map<String, dynamic>.from(cabinRaw)
         : <String, dynamic>{};
-
-    final amenitiesRaw =
-    cabin['amenities'];
 
     final cabinType =
     cabin['cabinType']
@@ -112,6 +197,56 @@ class BookingModel {
       json['totalPrice'],
     );
 
+    final hourlyRate = _toDouble(
+      cabin['price'] ??
+          cabin['hourlyPrice'] ??
+          json['hourlyRate'] ??
+          json['price'],
+    );
+
+    final seatsRaw = json['selectedSeats'];
+    final selectedSeats = <String>[];
+    if (seatsRaw is List) {
+      for (final s in seatsRaw) {
+        if (s == null) continue;
+        if (s is Map) {
+          final name = s['name']?.toString() ??
+              s['seatName']?.toString() ??
+              s['label']?.toString() ??
+              '';
+          final id = s['id']?.toString() ??
+              s['_id']?.toString() ??
+              s['seatNumber']?.toString() ??
+              '';
+          if (name.isNotEmpty) {
+            selectedSeats.add(id.isNotEmpty ? '$name #$id' : name);
+          } else if (id.isNotEmpty) {
+            selectedSeats.add('Seat $id');
+          }
+        } else {
+          final text = s.toString().trim();
+          if (text.isNotEmpty) selectedSeats.add(text);
+        }
+      }
+    }
+
+    final city = cabin['city']?.toString().trim() ??
+        cabin['location']?.toString().trim() ??
+        json['city']?.toString().trim() ??
+        '';
+
+    final address = () {
+      final fromCabin = cabin['address']?.toString().trim() ?? '';
+      if (fromCabin.isNotEmpty) return fromCabin;
+      final fromRoot = json['address']?.toString().trim() ?? '';
+      if (fromRoot.isNotEmpty) return fromRoot;
+      final fromLocation = cabin['fullAddress']?.toString().trim() ??
+          json['location']?.toString().trim() ??
+          '';
+      if (fromLocation.isNotEmpty) return fromLocation;
+      return city;
+    }();
+
     return BookingModel(
       id:
       json['_id']?.toString() ??
@@ -123,18 +258,18 @@ class BookingModel {
           json['cabinName']?.toString() ??
           'Workspace',
 
-      location:
-      cabin['address']?.toString() ??
-          '',
+      location: address,
 
-      spaceType:
-      isChamber
-          ? 'Medical Chamber'
-          : cabinType == 'exclusive'
-          ? 'Private Office'
-          : type == 'coworking'
-          ? 'Co-Working Space'
-          : 'Co-Working Space',
+      spaceType: () {
+        final isCafe = cabin['isCafe'] == true;
+        if (isChamber) return 'Medical Chamber';
+        if (isCafe) return 'Cafe & Dining';
+        if (cabinType == 'exclusive') return 'Private Office';
+        if (type == 'meeting' || cabinType == 'meeting') {
+          return 'Meeting Room';
+        }
+        return 'Co-Working Space';
+      }(),
 
       startDate:
       _formatDate(
@@ -201,7 +336,58 @@ class BookingModel {
       customerMobile:
       json['mobile']?.toString() ??
           '',
+
+      totalHours: totalHours,
+      totalDays: totalDays <= 0 ? 1 : totalDays,
+      hourlyRate: hourlyRate,
+      capacity: _toInt(
+        cabin['capacity'] ?? cabin['seatCount'] ?? seatCount,
+      ),
+      cabinKind: cabin['cabinType']?.toString().trim().isNotEmpty == true
+          ? cabin['cabinType'].toString().trim()
+          : (cabin['type']?.toString().trim().isNotEmpty == true
+              ? cabin['type'].toString().trim()
+              : 'normal'),
+      extraCharge: _toDouble(json['extraCharge']),
+      selectedSeats: selectedSeats,
+      transactionId: json['transactionId']?.toString() ??
+          json['paymentId']?.toString() ??
+          json['orderId']?.toString() ??
+          '',
+      bookingBasis:
+          json['bookingBasis']?.toString().trim().isNotEmpty == true
+              ? json['bookingBasis'].toString().trim()
+              : 'hourly',
+      city: city,
     );
+  }
+
+  double get dailyHours =>
+      totalDays > 0 && totalHours > 0 ? totalHours / totalDays : totalHours;
+
+  double get subtotalAmount =>
+      hourlyRate > 0 && totalHours > 0 ? hourlyRate * totalHours : 0;
+
+  double get gstAmount {
+    final base = subtotalAmount + extraCharge;
+    return base > 0 ? base * 0.18 : 0;
+  }
+
+  double get computedTotal => subtotalAmount + extraCharge + gstAmount;
+
+  String get shortTypeLabel {
+    final t = spaceType.toLowerCase();
+    if (t.contains('cafe')) return 'Cafe';
+    if (t.contains('medical')) return 'Medical';
+    if (t.contains('meeting')) return 'Meeting';
+    if (t.contains('private')) return 'Private Office';
+    return 'Co-Working';
+  }
+
+  String get shortBookingId {
+    if (id.isEmpty) return 'REF';
+    if (id.length <= 8) return id.toUpperCase();
+    return id.substring(id.length - 8).toUpperCase();
   }
 
   static BookingStatus _parseBookingStatus(
@@ -240,7 +426,13 @@ class BookingModel {
         .toLowerCase()) {
       case 'paid':
         return PaymentStatus.paid;
-
+      case 'failed':
+      case 'fail':
+        return PaymentStatus.failed;
+      case 'refunded':
+      case 'refund':
+        return PaymentStatus.refunded;
+      case 'pending':
       default:
         return PaymentStatus.pending;
     }

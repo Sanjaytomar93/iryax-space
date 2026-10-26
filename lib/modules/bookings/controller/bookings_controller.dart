@@ -10,6 +10,7 @@ import 'package:iryax_spaces/modules/bookings/widget/cancel_booking_dialog.dart'
 import 'package:iryax_spaces/modules/bookings/widget/replace_space_dialog.dart';
 import 'package:iryax_spaces/modules/bookings/widget/site_visit_details_dialog.dart';
 import 'package:iryax_spaces/modules/dashboard(home)/controller/home_controller.dart';
+import 'package:iryax_spaces/modules/spaces/model/space_model.dart';
 
 class BookingsController extends GetxController {
   final searchController = TextEditingController();
@@ -384,47 +385,20 @@ class BookingsController extends GetxController {
       isLoadingVisits.value = true;
       visitError.value = null;
 
-      debugPrint(
-        'SITE VISITS: loading...',
-      );
-
       final result =
       await _bookingService
           .getUserVisits();
-
-      debugPrint(
-        'SITE VISITS API COUNT: ${result.length}',
-      );
-
-      for (final visit in result) {
-        debugPrint(
-          'SITE VISIT => '
-              'id=${visit.id}, '
-              'space=${visit.spaceName}, '
-              'date=${visit.visitDate}, '
-              'time=${visit.visitTime}, '
-              'status=${visit.status}',
-        );
-      }
 
       siteVisits.assignAll(
         result,
       );
       _siteVisitsLoadedOnce = true;
-
-      debugPrint(
-        'SITE VISITS CONTROLLER COUNT: ${siteVisits.length}',
-      );
     } catch (e) {
       visitError.value = e
           .toString()
           .replaceFirst(
         'Exception: ',
         '',
-      );
-
-      debugPrint(
-        'SITE VISITS ERROR: ${visitError.value}',
       );
     } finally {
       isLoadingVisits.value =
@@ -516,10 +490,16 @@ class BookingsController extends GetxController {
   String paymentStatusText(
       PaymentStatus status,
       ) {
-    return status ==
-        PaymentStatus.paid
-        ? 'Paid'
-        : 'Pending';
+    switch (status) {
+      case PaymentStatus.paid:
+        return 'Paid';
+      case PaymentStatus.failed:
+        return 'Failed';
+      case PaymentStatus.refunded:
+        return 'Refunded';
+      case PaymentStatus.pending:
+        return 'Pending';
+    }
   }
 
   String paymentModeText(
@@ -567,6 +547,60 @@ class BookingsController extends GetxController {
         booking: booking,
       ),
     );
+  }
+
+  void replaceBooking({
+    required BookingModel oldBooking,
+    required SpaceModel newSpace,
+    required double newTotal,
+  }) {
+    final index = bookings.indexWhere((b) => b.id == oldBooking.id);
+    if (index != -1) {
+      final spaceTypeName = () {
+        if (newSpace.isChamber) return 'Medical Chamber';
+        if (newSpace.isCafe) return 'Cafe & Dining';
+        if (newSpace.cabinType == 'exclusive') return 'Private Office';
+        if (newSpace.type == 'meeting' || newSpace.cabinType == 'meeting') {
+          return 'Meeting Room';
+        }
+        return 'Co-Working Space';
+      }();
+
+      final displayName = () {
+        final name = newSpace.name.trim();
+        final cabin = (newSpace.cabin ?? '').trim();
+        final table = (newSpace.tableNumber ?? '').trim();
+        if (cabin.isNotEmpty &&
+            cabin.toLowerCase() != 'normal' &&
+            !name.toLowerCase().contains(cabin.toLowerCase())) {
+          return '$name - $cabin';
+        } else if (table.isNotEmpty &&
+            !name.toLowerCase().contains(table.toLowerCase())) {
+          return '$name - $table';
+        }
+        return name;
+      }();
+
+      final updated = oldBooking.copyWith(
+        spaceName: displayName,
+        location: newSpace.address.isNotEmpty
+            ? newSpace.address
+            : oldBooking.location,
+        spaceType: spaceTypeName,
+        amount: (newTotal > 0 && !newTotal.isNaN && !newTotal.isInfinite)
+            ? '₹${newTotal % 1 == 0 ? newTotal.toInt() : newTotal.toStringAsFixed(2)}'
+            : oldBooking.amount,
+        hourlyRate: newSpace.price,
+        cabinKind: newSpace.cabinType,
+      );
+
+      bookings[index] = updated;
+      bookings.refresh();
+
+      if (Get.isRegistered<HomeController>()) {
+        Get.find<HomeController>().syncWithBookings(bookings);
+      }
+    }
   }
 
   void openCancelBooking(

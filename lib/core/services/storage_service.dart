@@ -37,6 +37,9 @@ class StorageService {
   static const String _isDoctorKey =
       'is_doctor';
 
+  static const String _readNotificationIdsPrefix =
+      'read_notification_ids_';
+
   // ============================================================
   // REGISTRATION
   // ============================================================
@@ -418,6 +421,34 @@ class StorageService {
   }
 
   // ============================================================
+  // NOTIFICATIONS (local mark-read — per user, survives logout)
+  // ============================================================
+
+  static String _readNotificationIdsKeyFor([String? uid]) {
+    final id = (uid ?? userId).trim();
+    return '$_readNotificationIdsPrefix${id.isEmpty ? 'guest' : id}';
+  }
+
+  static Set<String> getReadNotificationIds() {
+    final key = _readNotificationIdsKeyFor();
+    var raw = _box.read(key);
+    // Migrate legacy global key → per-user key
+    if (raw is! List) {
+      raw = _box.read('read_notification_ids');
+      if (raw is List) {
+        _box.write(key, raw);
+        _box.remove('read_notification_ids');
+      }
+    }
+    if (raw is! List) return <String>{};
+    return raw.map((e) => e.toString()).where((e) => e.isNotEmpty).toSet();
+  }
+
+  static Future<void> saveReadNotificationIds(Set<String> ids) async {
+    await _box.write(_readNotificationIdsKeyFor(), ids.toList());
+  }
+
+  // ============================================================
   // LOGOUT / CLEAR CACHE
   // ============================================================
 
@@ -474,6 +505,8 @@ class StorageService {
     await _box.remove(
       _isDoctorKey,
     );
+
+    // Keep per-user read notification ids so Mark-all-read survives re-login.
 
     await _box.write(
       _isLoggedInKey,

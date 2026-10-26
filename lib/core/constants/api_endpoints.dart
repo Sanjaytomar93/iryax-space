@@ -14,6 +14,12 @@ class ApiEndpoints {
   static const String register =
       '$baseUrl/api/auth/register';
 
+  static const String forgotPassword =
+      '$baseUrl/api/auth/forgot-password';
+
+  static const String resetPassword =
+      '$baseUrl/api/auth/reset-password';
+
   // ============================================================
   // SPACES
   // ============================================================
@@ -95,5 +101,17 @@ class ApiEndpoints {
       String userId,
       ) {
     return '$baseUrl/api/auth/profile/$userId';
+  }
+
+  // ============================================================
+  // NOTIFICATIONS
+  // ============================================================
+
+  static String getNotifications(String userId) {
+    return '$baseUrl/api/auth/get-notifications/$userId';
+  }
+
+  static String deleteNotifications(String userId) {
+    return '$baseUrl/api/auth/delete-notifications/$userId';
   }
 }

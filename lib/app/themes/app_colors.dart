@@ -32,7 +32,7 @@ class AppColors {
   static const Color lightBackground = Color(0xFFF7F7FB);
   static const Color lightSurface = Color(0xFFFFFFFF);
 
-  static const Color lightPrimary = Color(0xFF5B4CF0);
+  static const Color lightPrimary = Color(0xFF26204A);
   static const Color lightPurple = Color(0xFF7B2CF5);
 
   static const Color lightTextPrimary = Color(0xFF20202E);
@@ -60,15 +60,15 @@ class AppColors {
   static const Color softRed = Color(0xFFFFECEC);
   static const Color softPurple = Color(0xFFF2ECFF);
 
-  // Buttons
-  static const Color gradientBlueStart = Color(0xFF4668F5);
-  static const Color gradientPurpleEnd = Color(0xFF9228F6);
+  // Buttons — #26204A family
+  static const Color gradientBlueStart = Color(0xFF26204A);
+  static const Color gradientPurpleEnd = Color(0xFF3D3568);
 
   // App bar
   static const Color appBarBackground = Color(0xFFFFFFFF);
 
   // Bottom navigation
   static const Color bottomNavBackground = Color(0xFFFFFFFF);
-  static const Color bottomNavSelected = Color(0xFF5B4CF0);
+  static const Color bottomNavSelected = Color(0xFF26204A);
   static const Color bottomNavUnselected = Color(0xFF9A9AAA);
 }

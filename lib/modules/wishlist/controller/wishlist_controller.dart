@@ -104,26 +104,13 @@ class WishlistController extends GetxController {
 
       // Never wipe a non-empty local list with a suspicious empty payload
       // right after a network glitch / parse miss.
-      if (result.isEmpty && previous.isNotEmpty && _hasLoadedOnce) {
-        debugPrint(
-          'WISHLIST LOAD SKIPPED EMPTY OVERWRITE '
-          '(kept ${previous.length} local items)',
-        );
-      } else {
+      if (result.isNotEmpty || !_hasLoadedOnce || previous.isEmpty) {
         items.assignAll(result);
       }
 
       _hasLoadedOnce = true;
-
-      debugPrint(
-        'WISHLIST LOADED: ${items.length}',
-      );
     } catch (e) {
       errorMessage.value = _friendlyError(e);
-
-      debugPrint(
-        'WISHLIST LOAD ERROR: $e',
-      );
     } finally {
       _isLoadingWishlist = false;
       isLoading.value = false;
@@ -163,9 +150,7 @@ class WishlistController extends GetxController {
     isFavorite(space.id);
 
     try {
-      updatingIds.add(space.id);
-
-      // Optimistic UI update
+      // Optimistic UI update first so hearts turn red immediately.
       if (wasFavorite) {
         items.removeWhere(
               (item) => item.id == space.id,
@@ -173,13 +158,23 @@ class WishlistController extends GetxController {
       } else {
         items.add(space);
       }
+      updatingIds.add(space.id);
 
       await _wishlistService.toggleWishlist(
         space.id,
       );
 
-      // Soft refresh — keep optimistic UI if server returns empty/glitchy data.
-      await loadWishlist();
+      // Soft refresh, but never drop a just-liked item if API lags.
+      final result = await _wishlistService.getWishlist();
+      if (result.isNotEmpty) {
+        final serverHas = result.any((e) => e.id == space.id);
+        if (!wasFavorite && !serverHas) {
+          items.assignAll([...result, space]);
+        } else {
+          items.assignAll(result);
+        }
+        _hasLoadedOnce = true;
+      }
     } catch (e) {
       // Roll back UI if API fails
       if (wasFavorite) {

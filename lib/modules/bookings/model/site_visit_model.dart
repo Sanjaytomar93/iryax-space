@@ -79,14 +79,16 @@ class SiteVisitModel {
       cabin['address']?.toString() ??
           '',
 
-      spaceType:
-      isChamber
-          ? 'Medical Chamber'
-          : cabinType == 'exclusive'
-          ? 'Private Office'
-          : type == 'coworking'
-          ? 'Co-Working Space'
-          : 'Co-Working Space',
+      spaceType: () {
+        final isCafe = cabin['isCafe'] == true;
+        if (isChamber) return 'Medical Chamber';
+        if (isCafe) return 'Cafe & Dining';
+        if (cabinType == 'exclusive') return 'Private Office';
+        if (type == 'meeting' || cabinType == 'meeting') {
+          return 'Meeting Room';
+        }
+        return 'Co-Working Space';
+      }(),
 
       visitDate:
       _formatDate(

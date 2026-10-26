@@ -9,12 +9,16 @@ class SpacesController extends GetxController {
   final SpacesService _spacesService = SpacesService();
 
   final searchController = TextEditingController();
+  final scrollController = ScrollController();
+  final cardsSectionKey = GlobalKey();
 
-  final selectedCategory = 'Co-Working'.obs;
+  final searchQuery = ''.obs;
+
+  final selectedCategory = 'All Spaces'.obs;
 
   final selectedCabinType = 'All Cabin Types'.obs;
 
-  final selectedFilter = 'All'.obs;
+  final selectedFilter = 'All Spaces'.obs;
 
   final spaces = <SpaceModel>[].obs;
 
@@ -70,6 +74,8 @@ class SpacesController extends GetxController {
 
   void changeCategory(String value) {
     selectedCategory.value = value;
+    // Avoid empty Private / Meeting lists when "Normal" cabin filter is on.
+    selectedCabinType.value = 'All Cabin Types';
   }
 
   void changeCabinType(String value) {
@@ -81,55 +87,93 @@ class SpacesController extends GetxController {
   }
 
   void _onSearchChanged() {
-    // Forces Obx widgets depending on
-    // filteredSpaces to rebuild.
-    spaces.refresh();
+    searchQuery.value = searchController.text.trim();
+  }
+
+  void scrollToSpaceCards() {
+    final ctx = cardsSectionKey.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+      alignment: 0.05,
+    );
+  }
+
+  bool _isCoworkingSpace(SpaceModel space) {
+    return !space.isChamber && !space.isCafe && !space.isExclusive;
+  }
+
+  bool _matchesCabinType(SpaceModel space, String selected) {
+    final cabin = space.cabinType.toLowerCase().trim();
+    if (selected == 'exclusive') {
+      return space.isExclusive;
+    }
+    if (selected == 'normal') {
+      return !space.isExclusive &&
+          (cabin.isEmpty || cabin == 'normal' || cabin == 'standard');
+    }
+    return cabin == selected;
+  }
+
+  bool _matchesCategory(SpaceModel space, String category) {
+    switch (category) {
+      case 'All':
+      case 'All Spaces':
+        // Show every space (active filter applied later).
+        return true;
+      case 'Co-Working':
+        return _isCoworkingSpace(space);
+      case 'Medical Chambers':
+        return space.isChamber;
+      case 'Cafe & Dining':
+        // Strict API flag only.
+        return space.isCafe;
+      case 'Private Offices':
+        // All exclusive cabins.
+        return space.isExclusive;
+      case 'Meeting Rooms':
+        // Show all spaces under Meeting (API has no dedicated meeting flag).
+        return true;
+      default:
+        return true;
+    }
   }
 
   List<SpaceModel> get filteredSpaces {
-    Iterable<SpaceModel> result = spaces;
+    // Touch reactive fields so Obx always rebuilds on filter/search changes.
+    final category = selectedCategory.value;
+    final cabinType = selectedCabinType.value;
+    final sortFilter = selectedFilter.value;
+    final query = searchQuery.value.toLowerCase();
+    final source = spaces.toList();
+
+    Iterable<SpaceModel> result = source;
 
     // ============================================================
     // CATEGORY
     // ============================================================
 
-    if (selectedCategory.value == 'Co-Working') {
-      result = result.where((space) {
-        return !space.isChamber || space.type?.toLowerCase() == 'coworking';
-      });
-    } else if (selectedCategory.value == 'Medical Chambers') {
-      result = result.where((space) => space.isChamber);
-    } else if (selectedCategory.value == 'Cafe & Dining') {
-      result = result.where((space) => space.isCafe);
-    }
-
-    if (selectedCategory.value == 'Private Offices') {
-      result = result.where((space) => space.isExclusive);
-    }
-
-    if (selectedCategory.value == 'Meeting Rooms') {
-      // Backend response currently does not provide
-      // a dedicated meeting-room identifier.
-      result = <SpaceModel>[];
-    }
+    result = result.where((space) => _matchesCategory(space, category));
 
     // ============================================================
     // CABIN TYPE
     // ============================================================
 
-    if (selectedCabinType.value != 'All Cabin Types') {
-      final selected = selectedCabinType.value.toLowerCase();
+    // Private Offices are exclusive — don't apply "Normal" cabin filter.
+    final applyCabinType = cabinType != 'All Cabin Types' &&
+        category != 'Private Offices' &&
+        category != 'Meeting Rooms';
 
-      result = result.where((space) {
-        return space.cabinType.toLowerCase() == selected;
-      });
+    if (applyCabinType) {
+      final selected = cabinType.toLowerCase();
+      result = result.where((space) => _matchesCabinType(space, selected));
     }
 
     // ============================================================
     // SEARCH
     // ============================================================
-
-    final query = searchController.text.trim().toLowerCase();
 
     if (query.isNotEmpty) {
       result = result.where((space) {
@@ -152,21 +196,18 @@ class SpacesController extends GetxController {
 
     final list = result.toList();
 
-    switch (selectedFilter.value) {
+    switch (sortFilter) {
       case 'New Added':
         list.sort((a, b) {
           final aDate = a.createdAt ?? DateTime(2000);
-
           final bDate = b.createdAt ?? DateTime(2000);
-
           return bDate.compareTo(aDate);
         });
         break;
-
-      // Ratings and proximity are not supplied by the spaces API yet. Keep
-      // the server order for these two UI filters until that data is exposed.
+      // Ratings / proximity not in API yet — keep server order.
       case 'Top Rated':
       case 'Nearest':
+      case 'All Spaces':
       case 'All':
       default:
         break;
@@ -176,17 +217,32 @@ class SpacesController extends GetxController {
   }
 
   List<SpaceModel> get coworkingSpaces {
-    return spaces.where((space) {
-      return !space.isChamber || space.type?.toLowerCase() == 'coworking';
-    }).toList();
+    return spaces
+        .where((space) => _isCoworkingSpace(space) && space.isActive)
+        .toList();
   }
 
   List<SpaceModel> get medicalChambers {
-    return spaces.where((space) => space.isChamber).toList();
+    return spaces
+        .where((space) => space.isChamber && space.isActive)
+        .toList();
   }
 
   List<SpaceModel> get cafeAndDiningSpaces {
-    return spaces.where((space) => space.isCafe).toList();
+    return spaces
+        .where((space) => space.isCafe && space.isActive)
+        .toList();
+  }
+
+  List<SpaceModel> get meetingRooms {
+    // Meeting shows all active spaces (same as filter).
+    return spaces.where((space) => space.isActive).toList();
+  }
+
+  List<SpaceModel> get privateOffices {
+    return spaces
+        .where((space) => space.isExclusive && space.isActive)
+        .toList();
   }
 
   String _cleanError(Object error) {
@@ -195,22 +251,20 @@ class SpacesController extends GetxController {
 
   void clearFilters() {
     searchController.clear();
+    searchQuery.value = '';
 
-    selectedCategory.value = 'Co-Working';
+    selectedCategory.value = 'All Spaces';
 
     selectedCabinType.value = 'All Cabin Types';
 
-    selectedFilter.value = 'All';
-
-    spaces.refresh();
+    selectedFilter.value = 'All Spaces';
   }
 
   @override
   void onClose() {
     searchController.removeListener(_onSearchChanged);
-
     searchController.dispose();
-
+    scrollController.dispose();
     super.onClose();
   }
 }

@@ -6,7 +6,6 @@ import 'package:iryax_spaces/core/constants/api_endpoints.dart';
 import 'package:iryax_spaces/core/services/storage_service.dart';
 import 'package:iryax_spaces/modules/bookings/model/booking_model.dart';
 import 'package:iryax_spaces/modules/bookings/model/site_visit_model.dart';
-
 class BookingService {
   Future<Map<String, dynamic>> createBooking({
     required String cabinId,

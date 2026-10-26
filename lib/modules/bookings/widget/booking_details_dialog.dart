@@ -11,38 +11,37 @@ import 'package:iryax_spaces/modules/bookings/service/invoice_pdf_service.dart';
 // ─────────────────────────────────────────────────────────
 class _DC {
   static const white = Color(0xFFFFFFFF);
-  static const whisper = Color(0xFFF8F9FB);
-  static const border = Color(0xFFE9ECF0);
-  static const steelGray = Color(0xFF1E1B2E);
-  static const titleGray = Color(0xFF111827);
-  static const textSecondary = Color(0xFF6B7280);
-  static const textMuted = Color(0xFF8A8A99);
+  static const whisper = Color(0xFFF7F7FB);
+  static const border = Color(0xFFE8E8F0);
+  static const steelGray = Color(0xFF26204A);
+  static const titleGray = Color(0xFF20202E);
+  static const textSecondary = Color(0xFF6B6B7B);
+  static const textMuted = Color(0xFF9292A3);
 
-  // Total Blue in Price Breakdown
-  static const totalBlue = Color(0xFF2563EB);
+  // App navy accents (match space booking)
+  static const totalBlue = Color(0xFF26204A);
+  static const accentSoft = Color(0xFFF2ECFF);
+  static const accentIcon = Color(0xFF26204A);
 
-  // Payment Mode (Cash / Online) -> Blue badge
-  static const paymentModeBg = Color(0xFFDBEAFE);
-  static const paymentModeText = Color(0xFF1D4ED8);
+  static const paymentModeBg = Color(0xFFF2ECFF);
+  static const paymentModeText = Color(0xFF26204A);
 
-  // Status Badges
-  static const confirmedBg = Color(0xFFDBEAFE);
-  static const confirmedText = Color(0xFF1D4ED8);
+  static const confirmedBg = Color(0xFFF2ECFF);
+  static const confirmedText = Color(0xFF26204A);
 
-  static const pendingBg = Color(0xFFFEF3C7);
+  static const pendingBg = Color(0xFFFFF4DF);
   static const pendingText = Color(0xFFB45309);
 
-  static const activeBg = Color(0xFFDCFCE7);
+  static const activeBg = Color(0xFFEAF8F0);
   static const activeText = Color(0xFF15803D);
 
-  static const completedBg = Color(0xFFF3E8FF);
-  static const completedText = Color(0xFF7E22CE);
+  static const completedBg = Color(0xFFF2ECFF);
+  static const completedText = Color(0xFF3D3568);
 
-  static const cancelledBg = Color(0xFFFEE2E2);
+  static const cancelledBg = Color(0xFFFFECEC);
   static const cancelledText = Color(0xFFB91C1C);
 
-  // Buttons
-  static const invoiceGreen = Color(0xFF0F804E);
+  static const invoiceGreen = Color(0xFF26204A);
   static const closeBtnBg = Color(0xFFF3F4F6);
   static const closeBtnText = Color(0xFF374151);
 }
@@ -74,7 +73,7 @@ class BookingDetailsDialog extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.12),
+                  color: const Color(0xFF26204A).withValues(alpha: 0.12),
                   blurRadius: 28,
                   offset: const Offset(0, 10),
                 ),
@@ -146,27 +145,17 @@ class BookingDetailsDialog extends StatelessWidget {
   // ══════════════════════════════════════════════════════
   Widget _buildHeader(String bookingRef) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
       decoration: const BoxDecoration(
-        color: _DC.white,
-        border: Border(bottom: BorderSide(color: _DC.border)),
+        gradient: LinearGradient(
+          colors: [Color(0xFF1F1A3D), Color(0xFF3D3568)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
       ),
       child: Row(
         children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEEF2FF),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.confirmation_number_outlined,
-              color: Color(0xFF4F46E5),
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -175,12 +164,13 @@ class BookingDetailsDialog extends StatelessWidget {
                   'Booking Details',
                   style: TextStyle(
                     fontFamily: 'Roboto',
-                    color: _DC.titleGray,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.2,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 GestureDetector(
                   onTap: () {
                     if (booking.id.isNotEmpty) {
@@ -199,19 +189,19 @@ class BookingDetailsDialog extends StatelessWidget {
                   child: Row(
                     children: [
                       Text(
-                        '#$bookingRef',
-                        style: const TextStyle(
+                        'ID  #$bookingRef',
+                        style: TextStyle(
                           fontFamily: 'Roboto',
-                          color: _DC.textMuted,
-                          fontSize: 11,
+                          color: Colors.white.withValues(alpha: 0.82),
+                          fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
                       const SizedBox(width: 4),
-                      const Icon(
+                      Icon(
                         Icons.copy_rounded,
-                        size: 11,
-                        color: _DC.textMuted,
+                        size: 12,
+                        color: Colors.white.withValues(alpha: 0.75),
                       ),
                     ],
                   ),
@@ -219,19 +209,19 @@ class BookingDetailsDialog extends StatelessWidget {
               ],
             ),
           ),
-          IconButton(
-            onPressed: Get.back,
-            style: IconButton.styleFrom(
-              backgroundColor: Colors.transparent,
-              padding: const EdgeInsets.all(4),
-              minimumSize: const Size(28, 28),
-            ),
-            icon: const Icon(
-              Icons.close_rounded,
-              color: _DC.textMuted,
-              size: 20,
+          Material(
+            color: Colors.white.withValues(alpha: 0.18),
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: Get.back,
+              child: const Padding(
+                padding: EdgeInsets.all(8),
+                child: Icon(Icons.close_rounded, color: Colors.white, size: 18),
+              ),
             ),
           ),
+          const SizedBox(width: 6),
         ],
       ),
     );
@@ -354,27 +344,38 @@ class BookingDetailsDialog extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
-          if (booking.location.isNotEmpty) ...[
-            const SizedBox(height: 5),
-            Row(
-              children: [
-                const Icon(Icons.location_on_outlined, size: 12, color: _DC.textSecondary),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    booking.location,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontFamily: 'Roboto',
-                      color: _DC.textSecondary,
-                      fontSize: 10.5,
-                    ),
+          const SizedBox(height: 5),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(top: 1),
+                child: Icon(
+                  Icons.location_on_outlined,
+                  size: 12,
+                  color: _DC.textSecondary,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  booking.location.trim().isNotEmpty
+                      ? booking.location.trim()
+                      : (booking.city.trim().isNotEmpty
+                          ? booking.city.trim()
+                          : '—'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Roboto',
+                    color: _DC.textSecondary,
+                    fontSize: 10.5,
+                    height: 1.25,
                   ),
                 ),
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
           const SizedBox(height: 4),
           Text(
             booking.spaceType.isNotEmpty
@@ -415,7 +416,7 @@ class BookingDetailsDialog extends StatelessWidget {
               label: 'START',
               date: booking.startDate,
               time: booking.startTime,
-              color: const Color(0xFF4338CA),
+              color: const Color(0xFF26204A),
             ),
           ),
           Padding(
@@ -431,7 +432,7 @@ class BookingDetailsDialog extends StatelessWidget {
               label: 'END',
               date: endDate,
               time: endTime,
-              color: _DC.steelGray,
+              color: const Color(0xFF3D3568),
             ),
           ),
         ],
@@ -780,25 +781,51 @@ class BookingDetailsDialog extends StatelessWidget {
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: booking.paymentStatus == PaymentStatus.paid
-                      ? _DC.activeBg
-                      : _DC.pendingBg,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  booking.paymentStatus == PaymentStatus.paid ? 'Paid' : 'Pending',
-                  style: TextStyle(
-                    fontFamily: 'Roboto',
-                    color: booking.paymentStatus == PaymentStatus.paid
-                        ? _DC.activeText
-                        : _DC.pendingText,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+              Builder(
+                builder: (_) {
+                  late final Color bg;
+                  late final Color fg;
+                  late final String label;
+                  switch (booking.paymentStatus) {
+                    case PaymentStatus.paid:
+                      bg = _DC.activeBg;
+                      fg = _DC.activeText;
+                      label = 'Paid';
+                      break;
+                    case PaymentStatus.failed:
+                      bg = const Color(0xFFFEE2E2);
+                      fg = const Color(0xFFB91C1C);
+                      label = 'Failed';
+                      break;
+                    case PaymentStatus.refunded:
+                      bg = _DC.confirmedBg;
+                      fg = _DC.confirmedText;
+                      label = 'Refunded';
+                      break;
+                    case PaymentStatus.pending:
+                      bg = _DC.pendingBg;
+                      fg = _DC.pendingText;
+                      label = 'Pending';
+                      break;
+                  }
+                  return Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: bg,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontFamily: 'Roboto',
+                        color: fg,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -812,55 +839,58 @@ class BookingDetailsDialog extends StatelessWidget {
   // ══════════════════════════════════════════════════════
   Widget _buildActionButtons() {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        // Download Invoice (Green)
-        ElevatedButton.icon(
-          onPressed: () => InvoicePdfService.downloadAndShare(booking),
-          icon: const Icon(
-            Icons.download_rounded,
-            size: 15,
-            color: Colors.white,
-          ),
-          label: const Text(
-            'Download Invoice',
-            style: TextStyle(
-              fontFamily: 'Roboto',
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
+        SizedBox(
+          height: 40,
+          child: OutlinedButton(
+            onPressed: Get.back,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: _DC.steelGray,
+              side: const BorderSide(color: _DC.border, width: 1.2),
+              backgroundColor: _DC.white,
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              minimumSize: const Size(0, 40),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(22),
+              ),
             ),
-          ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: _DC.invoiceGreen,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+            child: const Text(
+              'Close',
+              style: TextStyle(
+                fontFamily: 'Roboto',
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ),
-
-        const SizedBox(width: 8),
-
-        // Close Button
-        TextButton(
-          onPressed: Get.back,
-          style: TextButton.styleFrom(
-            backgroundColor: _DC.closeBtnBg,
-            foregroundColor: _DC.closeBtnText,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-          child: const Text(
-            'Close',
-            style: TextStyle(
-              fontFamily: 'Roboto',
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+        const Spacer(),
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => InvoicePdfService.downloadAndShare(booking),
+            borderRadius: BorderRadius.circular(22),
+            child: Ink(
+              height: 40,
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF26204A), Color(0xFF3D3568)],
+                ),
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: const Center(
+                child: Text(
+                  'Download Invoice',
+                  style: TextStyle(
+                    fontFamily: 'Roboto',
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             ),
           ),
         ),

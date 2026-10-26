@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:iryax_spaces/app/themes/app_colors.dart';
+import 'package:iryax_spaces/core/widgets/app_shimmer.dart';
 import 'package:iryax_spaces/modules/bookings/controller/bookings_controller.dart';
 import 'package:iryax_spaces/modules/bookings/model/booking_model.dart';
 import 'package:iryax_spaces/modules/bookings/model/site_visit_model.dart';
+import 'package:iryax_spaces/modules/bookings/service/bookings_export_service.dart';
 import 'package:iryax_spaces/modules/bookings/service/invoice_pdf_service.dart';
+import 'package:iryax_spaces/modules/bookings/widget/space_booking_details_dialog.dart';
 
 class MyBookingsView extends GetView<BookingsController> {
   const MyBookingsView({
@@ -34,9 +37,9 @@ class MyBookingsView extends GetView<BookingsController> {
             const SizedBox(height: 12),
 
             if (controller.selectedBookingTab.value == 0)
-              _spaceBookings()
+              _spaceBookings(context)
             else
-              _siteVisits(),
+              _siteVisits(context),
           ],
         ),
       ),
@@ -57,7 +60,7 @@ class MyBookingsView extends GetView<BookingsController> {
                 text: 'My ',
                 style: TextStyle(
                   color: AppColors.lightTextPrimary,
-                  fontSize: 18,
+                  fontSize: 20,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -67,21 +70,21 @@ class MyBookingsView extends GetView<BookingsController> {
                     : 'Site Visits',
                 style: const TextStyle(
                   color: AppColors.lightPrimary,
-                  fontSize: 18,
+                  fontSize: 20,
                   fontWeight: FontWeight.w800,
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: 4),
         Text(
           isBookings
               ? 'Manage all your workspace bookings'
               : 'Manage all your site visit appointments',
           style: const TextStyle(
             color: AppColors.lightTextSecondary,
-            fontSize: 10,
+            fontSize: 12,
           ),
         ),
       ],
@@ -169,13 +172,11 @@ class MyBookingsView extends GetView<BookingsController> {
     );
   }
 
-  Widget _spaceBookings() {
+  Widget _spaceBookings(BuildContext context) {
     if (controller.isLoadingBookings.value) {
       return const Padding(
-        padding: EdgeInsets.only(top: 80),
-        child: Center(
-          child: CircularProgressIndicator(),
-        ),
+        padding: EdgeInsets.only(top: 8),
+        child: BookingListShimmer(),
       );
     }
 
@@ -264,21 +265,17 @@ class MyBookingsView extends GetView<BookingsController> {
 
         const SizedBox(height: 12),
 
-        _bookingFilters(),
+        _bookingFilters(context),
 
-        // _filters(
-        //   searchHint: 'Search bookings...',
-        //   showPayment: true,
-        // ),
-
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
 
         Align(
           alignment: Alignment.centerLeft,
           child: Text(
-            'Showing ${filtered.length} of ${controller.bookings.length} bookings',            style: const TextStyle(
+            'Showing ${filtered.length} of ${controller.bookings.length} bookings',
+            style: const TextStyle(
               color: AppColors.lightTextSecondary,
-              fontSize: 9,
+              fontSize: 12,
             ),
           ),
         ),
@@ -407,30 +404,17 @@ class MyBookingsView extends GetView<BookingsController> {
 
             const SizedBox(height: 7),
 
-            Row(
-              children: [
-                Expanded(
-                  child: _statCard(
-                    'CANCELLED',
-                    '${controller.bookingCount(BookingStatus.cancelled)}',
-                    'cancelled reservations',
-                    Icons.cancel_outlined,
-                    AppColors.dashboardRed,
-                    AppColors.softRed,
-                    selected:
-                    selectedStat == 'Cancelled',
-                    onTap: () {
-                      _applyBookingStatFilter(
-                        'Cancelled',
-                      );
-                    },
-                  ),
-                ),
-
-                const Expanded(
-                  child: SizedBox(),
-                ),
-              ],
+            _statCard(
+              'CANCELLED',
+              '${controller.bookingCount(BookingStatus.cancelled)}',
+              'cancelled reservations',
+              Icons.cancel_outlined,
+              AppColors.dashboardRed,
+              AppColors.softRed,
+              selected: selectedStat == 'Cancelled',
+              onTap: () {
+                _applyBookingStatFilter('Cancelled');
+              },
             ),
           ],
         );
@@ -439,13 +423,11 @@ class MyBookingsView extends GetView<BookingsController> {
   }
 
 
-  Widget _siteVisits() {
+  Widget _siteVisits(BuildContext context) {
     if (controller.isLoadingVisits.value) {
       return const Padding(
-        padding: EdgeInsets.only(top: 80),
-        child: Center(
-          child: CircularProgressIndicator(),
-        ),
+        padding: EdgeInsets.only(top: 8),
+        child: BookingListShimmer(),
       );
     }
 
@@ -533,21 +515,17 @@ class MyBookingsView extends GetView<BookingsController> {
 
         const SizedBox(height: 12),
 
-        _siteVisitFilters(),
+        _siteVisitFilters(context),
 
-        // _filters(
-        //   searchHint: 'Search visits...',
-        //   showPayment: false,
-        // ),
-
-        const SizedBox(height: 7),
+        const SizedBox(height: 12),
 
         Align(
           alignment: Alignment.centerLeft,
           child: Text(
-            'Showing ${filtered.length} of ${controller.siteVisits.length} site visits',            style: const TextStyle(
+            'Showing ${filtered.length} of ${controller.siteVisits.length} site visits',
+            style: const TextStyle(
               color: AppColors.lightTextSecondary,
-              fontSize: 9,
+              fontSize: 12,
             ),
           ),
         ),
@@ -731,31 +709,17 @@ class MyBookingsView extends GetView<BookingsController> {
 
             const SizedBox(height: 7),
 
-            Row(
-              children: [
-                Expanded(
-                  child: _statCard(
-                    'CANCELLED',
-                    '${controller.siteVisitCount(SiteVisitStatus.cancelled)}',
-                    'cancelled visits',
-                    Icons.cancel_outlined,
-                    AppColors.dashboardRed,
-                    AppColors.softRed,
-                    selected:
-                    selectedStatus ==
-                        'Cancelled',
-                    onTap: () {
-                      _applySiteVisitStatFilter(
-                        'Cancelled',
-                      );
-                    },
-                  ),
-                ),
-
-                const Expanded(
-                  child: SizedBox(),
-                ),
-              ],
+            _statCard(
+              'CANCELLED',
+              '${controller.siteVisitCount(SiteVisitStatus.cancelled)}',
+              'cancelled visits',
+              Icons.cancel_outlined,
+              AppColors.dashboardRed,
+              AppColors.softRed,
+              selected: selectedStatus == 'Cancelled',
+              onTap: () {
+                _applySiteVisitStatFilter('Cancelled');
+              },
             ),
           ],
         );
@@ -765,41 +729,32 @@ class MyBookingsView extends GetView<BookingsController> {
 
 
   Widget _statCard(
-      String title,
-      String value,
-      String subtitle,
-      IconData icon,
-      Color iconColor,
-      Color background, {
-        required bool selected,
-        required VoidCallback onTap,
-      }) {
+    String title,
+    String value,
+    String subtitle,
+    IconData icon,
+    Color iconColor,
+    Color iconBg, {
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
     return InkWell(
       onTap: onTap,
-      borderRadius:
-      BorderRadius.circular(11),
+      borderRadius: BorderRadius.circular(10),
       child: AnimatedContainer(
-        duration: const Duration(
-          milliseconds: 180,
-        ),
-        padding:
-        const EdgeInsets.all(10),
+        duration: const Duration(milliseconds: 160),
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(9, 8, 9, 8),
         decoration: BoxDecoration(
-          color: selected
-              ? background
-              : AppColors.lightSurface,
-          borderRadius:
-          BorderRadius.circular(11),
+          color: AppColors.lightSurface,
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: selected
-                ? iconColor
-                : AppColors.lightBorder,
-            width: selected ? 1.4 : 1,
+            color: selected ? iconColor : AppColors.lightBorder,
+            width: selected ? 1.3 : 1,
           ),
         ),
         child: Column(
-          crossAxisAlignment:
-          CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
@@ -809,54 +764,41 @@ class MyBookingsView extends GetView<BookingsController> {
                     style: TextStyle(
                       color: selected
                           ? iconColor
-                          : AppColors
-                          .lightTextSecondary,
-                      fontSize: 9.5,
-                      fontWeight:
-                      FontWeight.w700,
+                          : AppColors.lightTextSecondary,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.3,
                     ),
                   ),
                 ),
-
                 Container(
                   width: 24,
                   height: 24,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: background,
-                    borderRadius:
-                    BorderRadius.circular(
-                      7,
-                    ),
+                    color: iconBg,
+                    borderRadius: BorderRadius.circular(7),
                   ),
-                  child: Icon(
-                    icon,
-                    color: iconColor,
-                    size: 12,
-                  ),
+                  child: Icon(icon, color: iconColor, size: 13),
                 ),
               ],
             ),
-
-            const SizedBox(height: 5),
-
+            const SizedBox(height: 4),
             Text(
               value,
               style: const TextStyle(
-                color:
-                AppColors.lightTextPrimary,
-                fontSize: 18,
-                fontWeight:
-                FontWeight.w800,
+                color: AppColors.lightTextPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
               ),
             ),
-
             Text(
               subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                color: AppColors
-                    .lightTextSecondary,
-                fontSize: 9.5,
+                color: AppColors.lightTextSecondary,
+                fontSize: 9,
               ),
             ),
           ],
@@ -865,457 +807,560 @@ class MyBookingsView extends GetView<BookingsController> {
     );
   }
 
-  Widget _bookingFilters() {
-    return Obx(
-          () => Column(
-        children: [
-          SizedBox(
-            height: 36,
-            child: TextField(
-              controller:
-              controller.searchController,
-              onChanged:
-              controller.updateSearch,
-              style: const TextStyle(
-                color:
-                AppColors.lightTextPrimary,
-                fontSize: 10,
+  Widget _bookingFilters(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: 42,
+          child: TextField(
+            autofocus: false,
+            controller: controller.searchController,
+            onChanged: controller.updateSearch,
+            style: const TextStyle(
+              color: AppColors.lightTextPrimary,
+              fontSize: 13,
+            ),
+            decoration: InputDecoration(
+              hintText: 'Search bookings...',
+              hintStyle: const TextStyle(
+                color: AppColors.lightHint,
+                fontSize: 13,
               ),
-              decoration: InputDecoration(
-                hintText:
-                'Search bookings...',
-                prefixIcon: const Icon(
-                  Icons.search_rounded,
-                  size: 14,
-                ),
-                filled: true,
-                fillColor:
-                AppColors.lightSurface,
-                isDense: true,
-                contentPadding:
-                const EdgeInsets.symmetric(
-                  horizontal: 9,
-                  vertical: 9,
-                ),
-                enabledBorder:
-                OutlineInputBorder(
-                  borderRadius:
-                  BorderRadius.circular(8),
-                  borderSide:
-                  const BorderSide(
-                    color:
-                    AppColors.lightBorder,
-                  ),
-                ),
-                focusedBorder:
-                OutlineInputBorder(
-                  borderRadius:
-                  BorderRadius.circular(8),
-                  borderSide:
-                  const BorderSide(
-                    color:
-                    AppColors.lightPrimary,
-                  ),
-                ),
+              prefixIcon: const Icon(
+                Icons.search_rounded,
+                size: 18,
+                color: AppColors.lightTextSecondary,
+              ),
+              filled: true,
+              fillColor: AppColors.lightSurface,
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.lightBorder),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.lightPrimary),
               ),
             ),
           ),
+        ),
+        const SizedBox(height: 10),
+        Obx(() {
+          final status = controller.selectedStatus.value;
+          final payment = controller.selectedPaymentStatus.value;
+          final type = controller.selectedType.value;
+          final date = controller.selectedBookingDate.value;
+          final hasFilters =
+              controller.searchQuery.value.isNotEmpty ||
+              status != 'All Status' ||
+              payment != 'Payment Status' ||
+              type != 'All Types' ||
+              date != null;
 
-          const SizedBox(height: 7),
+          final dateLabel = date == null
+              ? 'Date'
+              : '${date.day.toString().padLeft(2, '0')}/'
+                  '${date.month.toString().padLeft(2, '0')}';
 
-          _bookingDateField(),
-
-          const SizedBox(height: 7),
-
-          Row(
+          return Column(
             children: [
-              Expanded(
-                child: _bookingDropdown(
-                  value:
-                  controller
-                      .selectedStatus.value,
-                  items: const [
-                    'All Status',
-                    'Pending',
-                    'Confirmed',
-                    'Active',
-                    'Completed',
-                    'Cancelled',
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      controller.changeStatus(
-                        value,
-                      );
-                    }
-                  },
-                ),
-              ),
-
-              const SizedBox(width: 7),
-
-              Expanded(
-                child: _bookingDropdown(
-                  value:
-                  controller
-                      .selectedType.value,
-                  items: const [
-                    'All Types',
-                    'Co-Working Space',
-                    'Medical Chamber',
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      controller.changeType(
-                        value,
-                      );
-                    }
-                  },
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 7),
-
-          _bookingDropdown(
-            value:
-            controller
-                .selectedPaymentStatus
-                .value,
-            items: const [
-              'Payment Status',
-              'Paid',
-              'Pending',
-            ],
-            onChanged: (value) {
-              if (value != null) {
-                controller
-                    .changePaymentStatus(
-                  value,
-                );
-              }
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-
-  Widget _bookingDateField() {
-    return Obx(
-          () {
-        final selected =
-            controller.selectedBookingDate.value;
-
-        final text = selected == null
-            ? 'mm/dd/yyyy'
-            : '${selected.month.toString().padLeft(2, '0')}/'
-            '${selected.day.toString().padLeft(2, '0')}/'
-            '${selected.year}';
-
-        return InkWell(
-          onTap: () async {
-            final picked = await showDatePicker(
-              context: Get.context!,
-              initialDate:
-              selected ?? DateTime.now(),
-              firstDate: DateTime(2020),
-              lastDate: DateTime(2035),
-            );
-
-            if (picked != null) {
-              controller.changeBookingDate(
-                picked,
-              );
-            }
-          },
-          borderRadius:
-          BorderRadius.circular(8),
-          child: Container(
-            height: 36,
-            padding:
-            const EdgeInsets.symmetric(
-              horizontal: 9,
-            ),
-            decoration: BoxDecoration(
-              color: AppColors.lightSurface,
-              borderRadius:
-              BorderRadius.circular(8),
-              border: Border.all(
-                color: AppColors.lightBorder,
-              ),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.calendar_today_outlined,
-                  size: 12,
-                  color:
-                  AppColors.lightTextSecondary,
-                ),
-
-                const SizedBox(width: 7),
-
-                Expanded(
-                  child: Text(
-                    text,
-                    style: const TextStyle(
-                      color: AppColors
-                          .lightTextSecondary,
-                      fontSize: 9,
+              SizedBox(
+                height: 42,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _filterChip(
+                        label: dateLabel,
+                        icon: Icons.calendar_today_outlined,
+                        selected: date != null,
+                        expanded: true,
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: date ?? DateTime.now(),
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2035),
+                          );
+                          if (picked != null) {
+                            controller.changeBookingDate(picked);
+                          }
+                        },
+                        onClear: date != null
+                            ? () => controller.changeBookingDate(null)
+                            : null,
+                      ),
                     ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _filterChip(
+                        label: status == 'All Status' ? 'Status' : status,
+                        icon: Icons.flag_outlined,
+                        selected: status != 'All Status',
+                        expanded: true,
+                        onTap: () => _showFilterSheet(
+                          context: context,
+                          title: 'Status',
+                          items: const [
+                            'All Status',
+                            'Pending',
+                            'Confirmed',
+                            'Active',
+                            'Completed',
+                            'Cancelled',
+                          ],
+                          selected: status,
+                          onSelect: controller.changeStatus,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _filterChip(
+                        label:
+                            payment == 'Payment Status' ? 'Payment' : payment,
+                        icon: Icons.payments_outlined,
+                        selected: payment != 'Payment Status',
+                        expanded: true,
+                        onTap: () => _showFilterSheet(
+                          context: context,
+                          title: 'Payment Status',
+                          items: const [
+                            'Payment Status',
+                            'Pending',
+                            'Paid',
+                            'Failed',
+                            'Refunded',
+                          ],
+                          selected: payment,
+                          onSelect: controller.changePaymentStatus,
+                          labelOf: (v) => v == 'Payment Status' ? 'All' : v,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _filterChip(
+                        label: type == 'All Types' ? 'Type' : type,
+                        icon: Icons.category_outlined,
+                        selected: type != 'All Types',
+                        expanded: true,
+                        onTap: () => _showFilterSheet(
+                          context: context,
+                          title: 'Space Type',
+                          items: const [
+                            'All Types',
+                            'Co-Working Space',
+                            'Meeting Room',
+                            'Medical Chamber',
+                            'Cafe & Dining',
+                            'Private Office',
+                          ],
+                          selected: type,
+                          onSelect: controller.changeType,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Obx(
+                      () => _downloadIconButton(
+                        isLoading:
+                            BookingsExportService.isExportingBookings.value,
+                        onTap: () {
+                          BookingsExportService.downloadCsv(
+                            controller: controller,
+                            bookings: controller.filteredBookings,
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (hasFilters) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: _filterChip(
+                    label: 'Clear',
+                    icon: Icons.close_rounded,
+                    selected: false,
+                    accent: true,
+                    onTap: controller.clearDashboardFilters,
                   ),
                 ),
-
-                if (selected != null)
-                  InkWell(
-                    onTap: () {
-                      controller.changeBookingDate(
-                        null,
-                      );
-                    },
-                    child: const Icon(
-                      Icons.close_rounded,
-                      size: 13,
-                      color: AppColors
-                          .lightTextSecondary,
-                    ),
-                  ),
               ],
-            ),
-          ),
-        );
-      },
+            ],
+          );
+        }),
+      ],
     );
   }
 
-
-  Widget _bookingDropdown({
-    required String value,
-    required List<String> items,
-    required ValueChanged<String?>
-    onChanged,
+  Widget _downloadIconButton({
+    required VoidCallback onTap,
+    bool isLoading = false,
   }) {
-    return Container(
-      height: 34,
-      padding: const EdgeInsets.symmetric(
-        horizontal: 9,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.lightSurface,
-        borderRadius:
-        BorderRadius.circular(8),
-        border: Border.all(
-          color: AppColors.lightBorder,
-        ),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          isExpanded: true,
-          dropdownColor:
-          AppColors.lightSurface,
-          icon: const Icon(
-            Icons.keyboard_arrow_down_rounded,
-            size: 13,
-            color:
-            AppColors.lightTextSecondary,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: isLoading ? null : onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 42,
+          height: 42,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.lightSurface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.lightBorder),
           ),
-          style: const TextStyle(
-            color:
-            AppColors.lightTextPrimary,
-            fontSize: 9,
-          ),
-          items: items
-              .map(
-                (item) =>
-                DropdownMenuItem<String>(
-                  value: item,
-                  child: Text(
-                    item,
-                    overflow:
-                    TextOverflow.ellipsis,
+          child: isLoading
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      AppColors.lightPrimary,
+                    ),
                   ),
+                )
+              : const Icon(
+                  Icons.download_outlined,
+                  size: 18,
+                  color: AppColors.lightTextPrimary,
                 ),
-          )
-              .toList(),
-          onChanged: onChanged,
         ),
       ),
     );
   }
 
-
-  Widget _siteVisitFilters() {
-    return Obx(
-          () => Column(
-        children: [
-          SizedBox(
-            height: 36,
-            child: TextField(
-              onChanged: controller.updateSiteVisitSearch,
-              style: const TextStyle(
-                color: AppColors.lightTextPrimary,
-                fontSize: 10,
+  Widget _siteVisitFilters(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: 42,
+          child: TextField(
+            autofocus: false,
+            onChanged: controller.updateSiteVisitSearch,
+            style: const TextStyle(
+              color: AppColors.lightTextPrimary,
+              fontSize: 13,
+            ),
+            decoration: InputDecoration(
+              hintText: 'Search visits...',
+              hintStyle: const TextStyle(
+                color: AppColors.lightHint,
+                fontSize: 13,
               ),
-              decoration: InputDecoration(
-                hintText: 'Search visits...',
-                prefixIcon: const Icon(
-                  Icons.search_rounded,
-                  size: 14,
-                ),
-                filled: true,
-                fillColor: AppColors.lightSurface,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 9,
-                  vertical: 9,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(
-                    color: AppColors.lightBorder,
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(
-                    color: AppColors.lightPrimary,
-                  ),
-                ),
+              prefixIcon: const Icon(
+                Icons.search_rounded,
+                size: 18,
+                color: AppColors.lightTextSecondary,
+              ),
+              filled: true,
+              fillColor: AppColors.lightSurface,
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.lightBorder),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.lightPrimary),
               ),
             ),
           ),
+        ),
+        const SizedBox(height: 10),
+        Obx(() {
+          final status = controller.selectedVisitStatus.value;
+          final type = controller.selectedVisitType.value;
+          final date = controller.selectedVisitDate.value;
+          final hasFilters =
+              controller.siteVisitSearchQuery.value.isNotEmpty ||
+              status != 'All Status' ||
+              type != 'All Types' ||
+              date != null;
 
-          const SizedBox(height: 7),
+          final dateLabel = date == null
+              ? 'Date'
+              : '${date.day.toString().padLeft(2, '0')}/'
+                  '${date.month.toString().padLeft(2, '0')}';
 
-          _siteVisitDateField(),
-
-          const SizedBox(height: 7),
-
-          Row(
+          return Column(
             children: [
-              Expanded(
-                child: _bookingDropdown(
-                  value: controller.selectedVisitStatus.value,
-                  items: const [
-                    'All Status',
-                    'Pending',
-                    'Confirmed',
-                    'Completed',
-                    'Cancelled',
+              SizedBox(
+                height: 42,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _filterChip(
+                        label: dateLabel,
+                        icon: Icons.calendar_today_outlined,
+                        selected: date != null,
+                        expanded: true,
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: date ?? DateTime.now(),
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2035),
+                          );
+                          if (picked != null) {
+                            controller.changeVisitDate(picked);
+                          }
+                        },
+                        onClear: date != null
+                            ? () => controller.changeVisitDate(null)
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _filterChip(
+                        label: status == 'All Status' ? 'Status' : status,
+                        icon: Icons.flag_outlined,
+                        selected: status != 'All Status',
+                        expanded: true,
+                        onTap: () => _showFilterSheet(
+                          context: context,
+                          title: 'Status',
+                          items: const [
+                            'All Status',
+                            'Pending',
+                            'Confirmed',
+                            'Completed',
+                            'Cancelled',
+                          ],
+                          selected: status,
+                          onSelect: controller.changeVisitStatus,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _filterChip(
+                        label: type == 'All Types' ? 'Type' : type,
+                        icon: Icons.category_outlined,
+                        selected: type != 'All Types',
+                        expanded: true,
+                        onTap: () => _showFilterSheet(
+                          context: context,
+                          title: 'Space Type',
+                          items: const [
+                            'All Types',
+                            'Co-Working Space',
+                            'Meeting Room',
+                            'Medical Chamber',
+                            'Cafe & Dining',
+                            'Private Office',
+                          ],
+                          selected: type,
+                          onSelect: controller.changeVisitType,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Obx(
+                      () => _downloadIconButton(
+                        isLoading:
+                            BookingsExportService.isExportingSiteVisits.value,
+                        onTap: () {
+                          BookingsExportService.downloadSiteVisitsCsv(
+                            controller: controller,
+                            visits: controller.filteredSiteVisits,
+                          );
+                        },
+                      ),
+                    ),
                   ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      controller.changeVisitStatus(
-                        value,
-                      );
-                    }
-                  },
                 ),
               ),
-
-              const SizedBox(width: 7),
-
-              Expanded(
-                child: _bookingDropdown(
-                  value: controller.selectedVisitType.value,
-                  items: const [
-                    'All Types',
-                    'Co-Working Space',
-                    'Medical Chamber',
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      controller.changeVisitType(
-                        value,
-                      );
-                    }
-                  },
+              if (hasFilters) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: _filterChip(
+                    label: 'Clear',
+                    icon: Icons.close_rounded,
+                    selected: false,
+                    accent: true,
+                    onTap: controller.clearSiteVisitFilters,
+                  ),
                 ),
-              ),
+              ],
             ],
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _filterChip({
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+    VoidCallback? onClear,
+    bool accent = false,
+    bool expanded = false,
+  }) {
+    final bg = accent
+        ? AppColors.softPurple
+        : selected
+            ? AppColors.lightPrimary
+            : AppColors.lightSurface;
+    final fg = accent
+        ? AppColors.lightPrimary
+        : selected
+            ? Colors.white
+            : AppColors.lightTextPrimary;
+    final border = accent
+        ? AppColors.lightPrimary.withValues(alpha: 0.2)
+        : selected
+            ? AppColors.lightPrimary
+            : AppColors.lightBorder;
+
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icon, size: expanded ? 13 : 16, color: fg),
+        SizedBox(width: expanded ? 3 : 6),
+        Text(
+          label,
+          maxLines: 1,
+          softWrap: false,
+          style: TextStyle(
+            fontSize: expanded ? 11 : 12,
+            color: fg,
+            fontWeight: FontWeight.w600,
+            height: 1.1,
+          ),
+        ),
+        if (onClear != null) ...[
+          const SizedBox(width: 2),
+          GestureDetector(
+            onTap: onClear,
+            child: Icon(Icons.close, size: expanded ? 12 : 14, color: fg),
+          ),
+        ] else if (!accent && !selected) ...[
+          Icon(
+            Icons.keyboard_arrow_down_rounded,
+            size: expanded ? 14 : 16,
+            color: fg,
           ),
         ],
+      ],
+    );
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          height: 42,
+          width: expanded ? double.infinity : null,
+          padding: EdgeInsets.symmetric(horizontal: expanded ? 6 : 12),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: border),
+          ),
+          child: expanded
+              ? FittedBox(fit: BoxFit.scaleDown, child: content)
+              : content,
+        ),
       ),
     );
   }
 
-  Widget _siteVisitDateField() {
-    return Obx(
-          () {
-        final selected =
-            controller.selectedVisitDate.value;
-
-        final text = selected == null
-            ? 'mm/dd/yyyy'
-            : '${selected.month.toString().padLeft(2, '0')}/'
-            '${selected.day.toString().padLeft(2, '0')}/'
-            '${selected.year}';
-
-        return InkWell(
-          onTap: () async {
-            final picked = await showDatePicker(
-              context: Get.context!,
-              initialDate: selected ?? DateTime.now(),
-              firstDate: DateTime(2020),
-              lastDate: DateTime(2035),
-            );
-
-            if (picked != null) {
-              controller.changeVisitDate(
-                picked,
-              );
-            }
-          },
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            height: 36,
-            padding: const EdgeInsets.symmetric(
-              horizontal: 9,
-            ),
-            decoration: BoxDecoration(
-              color: AppColors.lightSurface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: AppColors.lightBorder,
-              ),
-            ),
-            child: Row(
+  void _showFilterSheet({
+    required BuildContext context,
+    required String title,
+    required List<String> items,
+    required String selected,
+    required ValueChanged<String> onSelect,
+    String Function(String)? labelOf,
+  }) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.lightSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(
-                  Icons.calendar_today_outlined,
-                  size: 12,
-                  color: AppColors.lightTextSecondary,
-                ),
-
-                const SizedBox(width: 7),
-
-                Expanded(
-                  child: Text(
-                    text,
-                    style: const TextStyle(
-                      color: AppColors.lightTextSecondary,
-                      fontSize: 9,
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.lightBorder,
+                      borderRadius: BorderRadius.circular(4),
                     ),
                   ),
                 ),
-
-                if (selected != null)
-                  InkWell(
+                const SizedBox(height: 14),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: AppColors.lightTextPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ...items.map((item) {
+                  final isSelected = item == selected;
+                  final label = labelOf?.call(item) ?? item;
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isSelected
+                            ? AppColors.lightPrimary
+                            : AppColors.lightTextPrimary,
+                        fontWeight:
+                            isSelected ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
+                    trailing: isSelected
+                        ? const Icon(
+                            Icons.check_circle_rounded,
+                            color: AppColors.lightPrimary,
+                            size: 20,
+                          )
+                        : null,
                     onTap: () {
-                      controller.changeVisitDate(
-                        null,
-                      );
+                      onSelect(item);
+                      Navigator.pop(ctx);
                     },
-                    child: const Icon(
-                      Icons.close_rounded,
-                      size: 13,
-                      color: AppColors.lightTextSecondary,
-                    ),
-                  ),
+                  );
+                }),
               ],
             ),
           ),
@@ -1323,78 +1368,6 @@ class MyBookingsView extends GetView<BookingsController> {
       },
     );
   }
-
-
-
-  // Widget _inputBox(
-  //     String hint,
-  //     IconData icon,
-  //     ) {
-  //   return Container(
-  //     height: 36,
-  //     padding: const EdgeInsets.symmetric(
-  //       horizontal: 9,
-  //     ),
-  //     decoration: BoxDecoration(
-  //       color: AppColors.lightSurface,
-  //       borderRadius: BorderRadius.circular(8),
-  //       border: Border.all(
-  //         color: AppColors.lightBorder,
-  //       ),
-  //     ),
-  //     child: Row(
-  //       children: [
-  //         Icon(
-  //           icon,
-  //           size: 12,
-  //           color: AppColors.lightTextSecondary,
-  //         ),
-  //         const SizedBox(width: 7),
-  //         Text(
-  //           hint,
-  //           style: const TextStyle(
-  //             color: AppColors.lightTextSecondary,
-  //             fontSize: 7,
-  //           ),
-  //         ),
-  //       ],
-  //     ),
-  //   );
-  // }
-
-  // Widget _dropdownBox(String text) {
-  //   return Container(
-  //     height: 34,
-  //     padding: const EdgeInsets.symmetric(
-  //       horizontal: 9,
-  //     ),
-  //     decoration: BoxDecoration(
-  //       color: AppColors.lightSurface,
-  //       borderRadius: BorderRadius.circular(8),
-  //       border: Border.all(
-  //         color: AppColors.lightBorder,
-  //       ),
-  //     ),
-  //     child: Row(
-  //       children: [
-  //         Expanded(
-  //           child: Text(
-  //             text,
-  //             style: const TextStyle(
-  //               color: AppColors.lightTextPrimary,
-  //               fontSize: 7,
-  //             ),
-  //           ),
-  //         ),
-  //         const Icon(
-  //           Icons.keyboard_arrow_down_rounded,
-  //           size: 13,
-  //           color: AppColors.lightTextSecondary,
-  //         ),
-  //       ],
-  //     ),
-  //   );
-  // }
 
   Widget _sectionHeader({
     required String title,
@@ -1402,35 +1375,35 @@ class MyBookingsView extends GetView<BookingsController> {
   }) {
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 9,
+        horizontal: 12,
+        vertical: 10,
       ),
       decoration: BoxDecoration(
         color: AppColors.softPurple,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         children: [
           const Icon(
             Icons.calendar_month_outlined,
-            size: 12,
+            size: 16,
             color: AppColors.lightPrimary,
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               title,
               style: const TextStyle(
                 color: AppColors.lightTextPrimary,
-                fontSize: 10,
+                fontSize: 13,
                 fontWeight: FontWeight.w700,
               ),
             ),
           ),
           Container(
             padding: const EdgeInsets.symmetric(
-              horizontal: 7,
-              vertical: 3,
+              horizontal: 8,
+              vertical: 4,
             ),
             decoration: BoxDecoration(
               color: AppColors.lightPrimary,
@@ -1440,7 +1413,8 @@ class MyBookingsView extends GetView<BookingsController> {
               '$count',
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 8.5,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -1449,17 +1423,13 @@ class MyBookingsView extends GetView<BookingsController> {
     );
   }
 
-  Widget _bookingCard(
-      BookingModel booking,
-      ) {
+  Widget _bookingCard(BookingModel booking) {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: AppColors.lightSurface,
         borderRadius: BorderRadius.circular(11),
-        border: Border.all(
-          color: AppColors.lightBorder,
-        ),
+        border: Border.all(color: AppColors.lightBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1471,7 +1441,7 @@ class MyBookingsView extends GetView<BookingsController> {
                   booking.spaceName,
                   style: const TextStyle(
                     color: AppColors.lightTextPrimary,
-                    fontSize: 12,
+                    fontSize: 13,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -1479,79 +1449,50 @@ class MyBookingsView extends GetView<BookingsController> {
               _numberBadge(booking.id),
             ],
           ),
-
-          const SizedBox(height: 2),
-
-          _smallInfo(
-            Icons.location_on_outlined,
-            booking.location,
-          ),
-
-          const SizedBox(height: 5),
-
-          _spaceTypeChip(
-            booking.spaceType,
-          ),
-
+          const SizedBox(height: 3),
+          _smallInfo(Icons.location_on_outlined, booking.location),
+          const SizedBox(height: 6),
+          _spaceTypeChip(booking.spaceType),
           const SizedBox(height: 8),
-
           Row(
             children: [
               Expanded(
-                child: _dateBox(
-                  'START',
-                  booking.startDate,
-                  booking.startTime,
-                ),
+                child: _dateBox('START', booking.startDate, booking.startTime),
               ),
               const SizedBox(width: 7),
               Expanded(
-                child: _dateBox(
-                  'END',
-                  booking.endDate,
-                  booking.endTime,
-                ),
+                child: _dateBox('END', booking.endDate, booking.endTime),
               ),
             ],
           ),
-
           const SizedBox(height: 6),
-
           Wrap(
             spacing: 5,
+            runSpacing: 5,
             children: [
               _miniChip(booking.duration),
               _miniChip(booking.days),
               _miniChip('${booking.seats} seats'),
             ],
           ),
-
           const SizedBox(height: 6),
-
-          Wrap(
-            spacing: 5,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _bookingStatusChip(
-                booking.status,
-              ),
-              _paymentModeChip(
-                booking.paymentMode,
-              ),
-              _paymentChip(
-                booking.paymentStatus,
+              _bookingStatusChip(booking.status),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _paymentModeChip(booking.paymentMode),
+                  const SizedBox(width: 6),
+                  _paymentChip(booking.paymentStatus),
+                ],
               ),
             ],
           ),
-
           const SizedBox(height: 8),
-
-          const Divider(
-            height: 1,
-            color: AppColors.lightBorder,
-          ),
-
+          const Divider(height: 1, color: AppColors.lightBorder),
           const SizedBox(height: 7),
-
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -1572,67 +1513,59 @@ class MyBookingsView extends GetView<BookingsController> {
                     'CREATED',
                     style: TextStyle(
                       color: AppColors.lightTextSecondary,
-                      fontSize: 9,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   Text(
                     booking.createdAt,
                     style: const TextStyle(
                       color: AppColors.lightTextSecondary,
-                      fontSize: 8.5,
+                      fontSize: 10,
                     ),
                   ),
                 ],
               ),
             ],
           ),
-
           const SizedBox(height: 7),
-
           Row(
             children: [
               Expanded(
                 child: _actionButton(
                   Icons.visibility_outlined,
                   AppColors.lightPrimary,
-                      () => controller.openBookingDetails(
-                    booking,
-                  ),
+                  () {
+                    Get.dialog(
+                      SpaceBookingDetailsDialog(booking: booking),
+                    );
+                  },
                 ),
               ),
-
               const SizedBox(width: 5),
-
               Expanded(
                 child: _actionButton(
                   Icons.download_outlined,
                   AppColors.dashboardGreen,
-                  () => InvoicePdfService.previewInvoice(booking),
+                  () => InvoicePdfService.downloadAndShare(booking),
                 ),
               ),
-
-              if (booking.status !=
-                  BookingStatus.cancelled &&
-                  booking.status !=
-                      BookingStatus.completed) ...[
+              if (booking.status != BookingStatus.cancelled &&
+                  booking.status != BookingStatus.completed) ...[
                 const SizedBox(width: 5),
                 Expanded(
                   child: _actionButton(
-                    Icons.sync_alt_rounded,
+                    Icons.sync_rounded,
                     AppColors.dashboardOrange,
-                        () => controller.openReplaceSpace(
-                      booking,
-                    ),
+                    () => controller.openReplaceSpace(booking),
                   ),
                 ),
                 const SizedBox(width: 5),
                 Expanded(
                   child: _actionButton(
                     Icons.close_rounded,
-                    AppColors.dashboardRed,
-                        () => controller.openCancelBooking(
-                      booking,
-                    ),
+                    const Color(0xFFDC2626),
+                    () => controller.openCancelBooking(booking),
                   ),
                 ),
               ],
@@ -1643,17 +1576,13 @@ class MyBookingsView extends GetView<BookingsController> {
     );
   }
 
-  Widget _siteVisitCard(
-      SiteVisitModel visit,
-      ) {
+  Widget _siteVisitCard(SiteVisitModel visit) {
     return Container(
       padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
         color: AppColors.lightSurface,
         borderRadius: BorderRadius.circular(11),
-        border: Border.all(
-          color: AppColors.lightBorder,
-        ),
+        border: Border.all(color: AppColors.lightBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1665,7 +1594,7 @@ class MyBookingsView extends GetView<BookingsController> {
                   visit.spaceName,
                   style: const TextStyle(
                     color: AppColors.lightTextPrimary,
-                    fontSize: 12,
+                    fontSize: 13,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -1673,45 +1602,17 @@ class MyBookingsView extends GetView<BookingsController> {
               _numberBadge(visit.id),
             ],
           ),
-
           const SizedBox(height: 3),
-
-          _smallInfo(
-            Icons.location_on_outlined,
-            visit.location,
-          ),
-
+          _smallInfo(Icons.location_on_outlined, visit.location),
           const SizedBox(height: 6),
-
-          _spaceTypeChip(
-            visit.spaceType,
-          ),
-
+          _spaceTypeChip(visit.spaceType),
           const SizedBox(height: 10),
-
-          const Divider(
-            height: 1,
-            color: AppColors.lightBorder,
-          ),
-
+          const Divider(height: 1, color: AppColors.lightBorder),
           const SizedBox(height: 10),
-
-          _visitRow(
-            'Visit date & time',
-            visit.visitDate,
-            visit.visitTime,
-          ),
-
+          _visitRow('Visit date & time', visit.visitDate, visit.visitTime),
           const SizedBox(height: 8),
-
-          _visitRow(
-            'Visitor',
-            visit.visitorName,
-            visit.visitorMobile,
-          ),
-
+          _visitRow('Visitor', visit.visitorName, visit.visitorMobile),
           const SizedBox(height: 8),
-
           Row(
             children: [
               const Expanded(
@@ -1719,55 +1620,39 @@ class MyBookingsView extends GetView<BookingsController> {
                   'Status',
                   style: TextStyle(
                     color: AppColors.lightTextSecondary,
-                    fontSize: 9,
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
-              _visitStatusChip(
-                visit.status,
-              ),
+              _visitStatusChip(visit.status),
             ],
           ),
-
           const SizedBox(height: 8),
-
-          _visitRow(
-            'Created at',
-            visit.createdAt,
-            '',
-          ),
-
+          _visitRow('Created at', visit.createdAt, ''),
           const SizedBox(height: 9),
-
           SizedBox(
             width: double.infinity,
-            height: 32,
+            height: 34,
             child: OutlinedButton.icon(
-              onPressed: () {
-                controller.openSiteVisitDetails(
-                  visit,
-                );
-              },
+              onPressed: () => controller.openSiteVisitDetails(visit),
               style: OutlinedButton.styleFrom(
                 backgroundColor: AppColors.softPurple,
-                side: const BorderSide(
-                  color: AppColors.lightBorder,
-                ),
+                side: const BorderSide(color: AppColors.lightBorder),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(7),
                 ),
               ),
               icon: const Icon(
                 Icons.visibility_outlined,
-                size: 11,
+                size: 14,
                 color: AppColors.lightPrimary,
               ),
               label: const Text(
                 'View Details',
                 style: TextStyle(
                   color: AppColors.lightPrimary,
-                  fontSize: 10,
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -1778,11 +1663,7 @@ class MyBookingsView extends GetView<BookingsController> {
     );
   }
 
-  Widget _dateBox(
-      String title,
-      String date,
-      String time,
-      ) {
+  Widget _dateBox(String title, String date, String time) {
     return Container(
       padding: const EdgeInsets.all(7),
       decoration: BoxDecoration(
@@ -1796,7 +1677,7 @@ class MyBookingsView extends GetView<BookingsController> {
             title,
             style: const TextStyle(
               color: AppColors.lightTextSecondary,
-              fontSize: 8,
+              fontSize: 10,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -1805,7 +1686,7 @@ class MyBookingsView extends GetView<BookingsController> {
             date,
             style: const TextStyle(
               color: AppColors.lightTextPrimary,
-              fontSize: 9,
+              fontSize: 11,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -1813,7 +1694,7 @@ class MyBookingsView extends GetView<BookingsController> {
             time,
             style: const TextStyle(
               color: AppColors.lightTextSecondary,
-              fontSize: 8,
+              fontSize: 10,
             ),
           ),
         ],
@@ -1822,49 +1703,40 @@ class MyBookingsView extends GetView<BookingsController> {
   }
 
   Widget _actionButton(
-      IconData icon,
-      Color color,
-      VoidCallback onTap,
-      ) {
+    IconData icon,
+    Color color,
+    VoidCallback onTap,
+  ) {
     return SizedBox(
-      height: 28,
+      height: 30,
       child: OutlinedButton(
         onPressed: onTap,
         style: OutlinedButton.styleFrom(
           padding: EdgeInsets.zero,
-          side: const BorderSide(
-            color: AppColors.lightBorder,
-          ),
+          side: const BorderSide(color: AppColors.lightBorder),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(6),
           ),
         ),
-        child: Icon(
-          icon,
-          size: 11,
-          color: color,
-        ),
+        child: Icon(icon, size: 15, color: color),
       ),
     );
   }
 
-  Widget _smallInfo(
-      IconData icon,
-      String text,
-      ) {
+  Widget _smallInfo(IconData icon, String text) {
     return Row(
       children: [
-        Icon(
-          icon,
-          size: 11,
-          color: AppColors.lightTextSecondary,
-        ),
-        const SizedBox(width: 3),
-        Text(
-          text,
-          style: const TextStyle(
-            color: AppColors.lightTextSecondary,
-            fontSize: 9,
+        Icon(icon, size: 13, color: AppColors.lightTextSecondary),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.lightTextSecondary,
+              fontSize: 11,
+            ),
           ),
         ),
       ],
@@ -1873,10 +1745,7 @@ class MyBookingsView extends GetView<BookingsController> {
 
   Widget _numberBadge(String value) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 6,
-        vertical: 3,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
         color: AppColors.lightBackground,
         borderRadius: BorderRadius.circular(12),
@@ -1885,34 +1754,27 @@ class MyBookingsView extends GetView<BookingsController> {
         '#$value',
         style: const TextStyle(
           color: AppColors.lightTextSecondary,
-          fontSize: 7.5,
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
   }
 
   Widget _spaceTypeChip(String type) {
-    final medical =
-    type.toLowerCase().contains('medical');
+    final medical = type.toLowerCase().contains('medical');
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 7,
-        vertical: 3,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: medical
-            ? AppColors.softGreen
-            : AppColors.softBlue,
+        color: medical ? AppColors.softGreen : AppColors.softBlue,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         type,
         style: TextStyle(
-          color: medical
-              ? AppColors.dashboardGreen
-              : AppColors.dashboardBlue,
-          fontSize: 7.5,
+          color: medical ? AppColors.dashboardGreen : AppColors.dashboardBlue,
+          fontSize: 10,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -1921,10 +1783,7 @@ class MyBookingsView extends GetView<BookingsController> {
 
   Widget _miniChip(String text) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 6,
-        vertical: 3,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(
         color: AppColors.lightBackground,
         borderRadius: BorderRadius.circular(5),
@@ -1933,7 +1792,7 @@ class MyBookingsView extends GetView<BookingsController> {
         text,
         style: const TextStyle(
           color: AppColors.lightTextPrimary,
-          fontSize: 7.5,
+          fontSize: 10,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -1941,31 +1800,31 @@ class MyBookingsView extends GetView<BookingsController> {
   }
 
   Widget _bookingStatusChip(
-      BookingStatus status,
-      ) {
+    BookingStatus status,
+  ) {
     Color color;
     Color background;
 
     switch (status) {
-      case BookingStatus.pending:
-        color = AppColors.dashboardOrange;
-        background = AppColors.softOrange;
-        break;
       case BookingStatus.confirmed:
-        color = AppColors.dashboardBlue;
-        background = AppColors.softBlue;
+        color = const Color(0xFF047857);
+        background = const Color(0xFFD1FAE5);
         break;
       case BookingStatus.active:
-        color = AppColors.dashboardGreen;
-        background = AppColors.softGreen;
+        color = const Color(0xFF15803D);
+        background = const Color(0xFFDCFCE7);
+        break;
+      case BookingStatus.pending:
+        color = const Color(0xFFB45309);
+        background = const Color(0xFFFEF3C7);
         break;
       case BookingStatus.completed:
-        color = AppColors.dashboardPurple;
-        background = AppColors.softPurple;
+        color = const Color(0xFF7E22CE);
+        background = const Color(0xFFF3E8FF);
         break;
       case BookingStatus.cancelled:
-        color = AppColors.dashboardRed;
-        background = AppColors.softRed;
+        color = const Color(0xFFB91C1C);
+        background = const Color(0xFFFEE2E2);
         break;
     }
 
@@ -1977,55 +1836,70 @@ class MyBookingsView extends GetView<BookingsController> {
   }
 
   Widget _paymentChip(
-      PaymentStatus status,
-      ) {
+    PaymentStatus status,
+  ) {
+    late final Color text;
+    late final Color bg;
+
+    switch (status) {
+      case PaymentStatus.pending:
+        text = const Color(0xFF854D0E);
+        bg = const Color(0xFFFEF9C3);
+        break;
+      case PaymentStatus.paid:
+        text = const Color(0xFF047857);
+        bg = const Color(0xFFD1FAE5);
+        break;
+      case PaymentStatus.failed:
+        text = const Color(0xFFB91C1C);
+        bg = const Color(0xFFFEE2E2);
+        break;
+      case PaymentStatus.refunded:
+        text = const Color(0xFF1D4ED8);
+        bg = const Color(0xFFDBEAFE);
+        break;
+    }
+
     return _tag(
       controller.paymentStatusText(status),
-      status == PaymentStatus.paid
-          ? AppColors.dashboardGreen
-          : AppColors.dashboardOrange,
-      status == PaymentStatus.paid
-          ? AppColors.softGreen
-          : AppColors.softOrange,
+      text,
+      bg,
     );
   }
 
   Widget _paymentModeChip(
-      PaymentMode mode,
-      ) {
+    PaymentMode mode,
+  ) {
+    final isCash = mode == PaymentMode.cash;
     return _tag(
       controller.paymentModeText(mode),
-      mode == PaymentMode.cash
-          ? AppColors.dashboardOrange
-          : AppColors.dashboardBlue,
-      mode == PaymentMode.cash
-          ? AppColors.softOrange
-          : AppColors.softBlue,
+      isCash ? const Color(0xFFC2410C) : const Color(0xFF1D4ED8),
+      isCash ? const Color(0xFFFFEDD5) : const Color(0xFFDBEAFE),
     );
   }
 
   Widget _visitStatusChip(
-      SiteVisitStatus status,
-      ) {
+    SiteVisitStatus status,
+  ) {
     Color color;
     Color bg;
 
     switch (status) {
       case SiteVisitStatus.pending:
-        color = AppColors.dashboardOrange;
-        bg = AppColors.softOrange;
+        color = const Color(0xFFB45309);
+        bg = const Color(0xFFFEF3C7);
         break;
       case SiteVisitStatus.confirmed:
-        color = AppColors.dashboardGreen;
-        bg = AppColors.softGreen;
+        color = const Color(0xFF047857);
+        bg = const Color(0xFFD1FAE5);
         break;
       case SiteVisitStatus.completed:
-        color = AppColors.dashboardBlue;
-        bg = AppColors.softBlue;
+        color = const Color(0xFF1D4ED8);
+        bg = const Color(0xFFDBEAFE);
         break;
       case SiteVisitStatus.cancelled:
-        color = AppColors.dashboardRed;
-        bg = AppColors.softRed;
+        color = const Color(0xFFB91C1C);
+        bg = const Color(0xFFFEE2E2);
         break;
     }
 
@@ -2037,35 +1911,32 @@ class MyBookingsView extends GetView<BookingsController> {
   }
 
   Widget _tag(
-      String text,
-      Color color,
-      Color background,
-      ) {
+    String text,
+    Color color,
+    Color background,
+  ) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 6,
-        vertical: 3,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Text(
         text,
         style: TextStyle(
           color: color,
-          fontSize: 7.5,
-          fontWeight: FontWeight.w600,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
   }
 
   Widget _visitRow(
-      String label,
-      String mainValue,
-      String secondary,
-      ) {
+    String label,
+    String mainValue,
+    String secondary,
+  ) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2074,7 +1945,7 @@ class MyBookingsView extends GetView<BookingsController> {
             label,
             style: const TextStyle(
               color: AppColors.lightTextSecondary,
-              fontSize: 9,
+              fontSize: 11,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -2086,7 +1957,7 @@ class MyBookingsView extends GetView<BookingsController> {
               mainValue,
               style: const TextStyle(
                 color: AppColors.lightTextPrimary,
-                fontSize: 9.5,
+                fontSize: 11,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -2095,7 +1966,7 @@ class MyBookingsView extends GetView<BookingsController> {
                 secondary,
                 style: const TextStyle(
                   color: AppColors.lightTextSecondary,
-                  fontSize: 8,
+                  fontSize: 10,
                 ),
               ),
           ],

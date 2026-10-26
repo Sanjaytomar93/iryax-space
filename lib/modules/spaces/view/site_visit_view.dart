@@ -1,11 +1,18 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iryax_spaces/app/routes/app_routes.dart';
 
 import 'package:iryax_spaces/core/services/storage_service.dart';
+import 'package:iryax_spaces/core/widgets/app_shimmer.dart';
+import 'package:iryax_spaces/core/widgets/detail_nav_bar.dart';
+import 'package:iryax_spaces/modules/bookings/controller/bookings_controller.dart';
 import 'package:iryax_spaces/modules/bookings/service/booking_service.dart';
 import 'package:iryax_spaces/modules/navigation/controller/navigation_controller.dart';
+import 'package:iryax_spaces/modules/notifications/controller/notification_controller.dart';
+import 'package:iryax_spaces/modules/spaces/controller/spaces_controller.dart';
 import 'package:iryax_spaces/modules/spaces/model/space_model.dart';
+import 'package:iryax_spaces/modules/spaces/widget/booking_success_dialog.dart';
 
 import '../../../app/themes/app_colors.dart';
 
@@ -35,6 +42,7 @@ class _SiteVisitViewState extends State<SiteVisitView> {
   String selectedPeriod = 'AM';
 
   int _selectedImageIndex = 0;
+  PageController? _galleryPageController;
 
   @override
   void initState() {
@@ -48,16 +56,53 @@ class _SiteVisitViewState extends State<SiteVisitView> {
 
     visitorNameController.text = StorageService.userName;
     mobileController.text = StorageService.userMobile;
+    _galleryPageController = PageController();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      FocusManager.instance.primaryFocus?.unfocus();
+    });
   }
 
   @override
   void dispose() {
+    _galleryPageController?.dispose();
     visitorNameController.dispose();
     mobileController.dispose();
     dateController.dispose();
     timeController.dispose();
 
     super.dispose();
+  }
+
+  void _goToGalleryImage(int index, int total) {
+    if (total <= 0) return;
+    final next = index.clamp(0, total - 1);
+    if (next == _selectedImageIndex) return;
+    setState(() => _selectedImageIndex = next);
+    if (_galleryPageController?.hasClients == true) {
+      _galleryPageController!.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  void _openImageViewer(List<String> images, int initialIndex) {
+    if (images.isEmpty) return;
+    final start = initialIndex.clamp(0, images.length - 1);
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black,
+        pageBuilder: (_, __, ___) => _SiteVisitImageViewer(
+          images: images,
+          initialIndex: start,
+        ),
+        transitionsBuilder: (_, animation, __, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+      ),
+    );
   }
 
   // ============================================================
@@ -91,63 +136,67 @@ class _SiteVisitViewState extends State<SiteVisitView> {
       );
     }
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF6F6FA),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildTopBar(),
-            Expanded(
-              child: Form(
-                key: formKey,
-                child: ListView(
-                  padding: EdgeInsets.zero,
-                  children: [
-                    _buildGallery(),
+    return GestureDetector(
+      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+      behavior: HitTestBehavior.translucent,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF6F6FA),
+        body: SafeArea(
+          child: Column(
+            children: [
+              _buildTopBar(),
+              Expanded(
+                child: Form(
+                  key: formKey,
+                  child: ListView(
+                    padding: EdgeInsets.zero,
+                    children: [
+                      _buildGallery(),
 
-                    // White container for Space Info & Capacity/Visit Cost stats
-                    _buildHeaderContainer(),
+                      // White container for Space Info & Capacity/Visit Cost stats
+                      _buildHeaderContainer(),
 
-                    // Cards & Actions section
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 16, 14, 32),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildVisitorCard(),
+                      // Cards & Actions section
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 16, 14, 32),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildVisitorCard(),
 
-                          const SizedBox(height: 14),
+                            const SizedBox(height: 14),
 
-                          _buildTimeSlotCard(),
+                            _buildTimeSlotCard(),
 
-                          const SizedBox(height: 18),
+                            const SizedBox(height: 18),
 
-                          _buildConfirmButton(),
+                            _buildConfirmButton(),
 
-                          const SizedBox(height: 24),
+                            const SizedBox(height: 24),
 
-                          const Text(
-                            'RELATED CHAMBERS',
-                            style: TextStyle(
-                              fontFamily: 'Roboto',
-                              color: Color(0xFF1E1B2E),
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.32,
+                            const Text(
+                              'RELATED CHAMBERS',
+                              style: TextStyle(
+                                fontFamily: 'Roboto',
+                                color: Color(0xFF26204A),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.32,
+                              ),
                             ),
-                          ),
 
-                          const SizedBox(height: 12),
+                            const SizedBox(height: 12),
 
-                          _buildRelatedSpaces(),
-                        ],
+                            _buildRelatedSpaces(),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -158,35 +207,12 @@ class _SiteVisitViewState extends State<SiteVisitView> {
   // ============================================================
 
   Widget _buildTopBar() {
-    return Container(
-      height: 49,
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      alignment: Alignment.centerLeft,
-      child: GestureDetector(
-        onTap: Get.back,
-        behavior: HitTestBehavior.opaque,
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.arrow_back,
-              color: Color(0xFF1E1B2E),
-              size: 16,
-            ),
-            SizedBox(width: 6),
-            Text(
-              'Back',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                color: Color(0xFF1E1B2E),
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
+    final spaceName = space?.name.trim() ?? '';
+    return DetailNavBar(
+      title: 'Site Visit',
+      subtitle: spaceName.isNotEmpty
+          ? spaceName
+          : 'Schedule your site visit',
     );
   }
 
@@ -202,106 +228,221 @@ class _SiteVisitViewState extends State<SiteVisitView> {
         .where((url) => url.isNotEmpty)
         .toList();
 
+    final multi = galleryImages.length > 1;
+
     if (galleryImages.isEmpty) {
-      return SizedBox(
-        height: 230,
-        width: double.infinity,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            _imagePlaceholder(),
-            Positioned(
-              left: 12,
-              top: 12,
-              child: _categoryBadge(currentSpace),
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: SizedBox(
+            height: 230,
+            width: double.infinity,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                _imagePlaceholder(),
+                Positioned(
+                  left: 12,
+                  top: 12,
+                  child: _categoryBadge(currentSpace),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       );
     }
 
-    if (_selectedImageIndex >= galleryImages.length) {
-      _selectedImageIndex = 0;
-    }
-
-    return SizedBox(
-      height: 230,
-      width: double.infinity,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.network(
-            galleryImages[_selectedImageIndex],
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _imagePlaceholder(),
-          ),
-
-          // Category badge top-left
-          Positioned(
-            left: 12,
-            top: 12,
-            child: _categoryBadge(currentSpace),
-          ),
-
-          // Dots indicator bottom center
-          if (galleryImages.length > 1)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 34,
-              child: Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: List.generate(galleryImages.length, (index) {
-                    final selected = _selectedImageIndex == index;
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      margin: const EdgeInsets.symmetric(horizontal: 2),
-                      width: selected ? 14 : 5,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? Colors.white
-                            : Colors.white.withOpacity(0.5),
-                        borderRadius: BorderRadius.circular(selected ? 4 : 2.5),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: SizedBox(
+          height: 240,
+          width: double.infinity,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              PageView.builder(
+                controller: _galleryPageController,
+                itemCount: galleryImages.length,
+                onPageChanged: (index) {
+                  setState(() => _selectedImageIndex = index);
+                },
+                itemBuilder: (_, index) {
+                  return GestureDetector(
+                    onTap: () => _openImageViewer(galleryImages, index),
+                    child: CachedNetworkImage(
+                      imageUrl: galleryImages[index],
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      fadeInDuration: Duration.zero,
+                      fadeOutDuration: Duration.zero,
+                      memCacheWidth: 900,
+                      placeholder: (_, __) => const AppShimmerBox(
+                        width: double.infinity,
+                        height: double.infinity,
+                        borderRadius: 0,
                       ),
-                    );
-                  }),
-                ),
+                      errorWidget: (_, __, ___) => _imagePlaceholder(),
+                    ),
+                  );
+                },
               ),
-            ),
 
-          // Image counter pill bottom center
-          if (galleryImages.length > 1)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 10,
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xB314121E), // rgba(20, 18, 30, 0.7)
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Text(
-                    '${_selectedImageIndex + 1} / ${galleryImages.length}',
-                    style: const TextStyle(
-                      fontFamily: 'Roboto',
-                      color: Colors.white,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
+              if (multi)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: 64,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.42),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
+
+              Positioned(
+                left: 12,
+                top: 12,
+                child: _categoryBadge(currentSpace),
+              ),
+
+              if (multi) ...[
+                Positioned(
+                  left: 8,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: _galleryArrowBtn(
+                      icon: Icons.chevron_left_rounded,
+                      enabled: _selectedImageIndex > 0,
+                      onTap: () => _goToGalleryImage(
+                        _selectedImageIndex - 1,
+                        galleryImages.length,
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  right: 8,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: _galleryArrowBtn(
+                      icon: Icons.chevron_right_rounded,
+                      enabled: _selectedImageIndex < galleryImages.length - 1,
+                      onTap: () => _goToGalleryImage(
+                        _selectedImageIndex + 1,
+                        galleryImages.length,
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 14,
+                  child: Center(
+                    child: _galleryIndicator(galleryImages.length),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _galleryArrowBtn({
+    required IconData icon,
+    required VoidCallback onTap,
+    required bool enabled,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        customBorder: const CircleBorder(),
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 160),
+          opacity: enabled ? 1 : 0.35,
+          child: Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.92),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF26204A).withValues(alpha: 0.16),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Icon(icon, size: 24, color: AppColors.lightPrimary),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _galleryIndicator(int imageCount) {
+    final indexes = _galleryDotIndexes(imageCount);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.28),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < indexes.length; i++) ...[
+            if (i > 0) const SizedBox(width: 5),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: indexes[i] == _selectedImageIndex ? 16 : 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: indexes[i] == _selectedImageIndex
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(4),
               ),
             ),
+          ],
         ],
       ),
     );
+  }
+
+  List<int> _galleryDotIndexes(int count) {
+    if (count <= 3) return List<int>.generate(count, (i) => i);
+    if (_selectedImageIndex <= 0) return const [0, 1, 2];
+    if (_selectedImageIndex >= count - 1) {
+      return [count - 3, count - 2, count - 1];
+    }
+    return [
+      _selectedImageIndex - 1,
+      _selectedImageIndex,
+      _selectedImageIndex + 1,
+    ];
   }
 
   Widget _categoryBadge(SpaceModel currentSpace) {
@@ -315,7 +456,7 @@ class _SiteVisitViewState extends State<SiteVisitView> {
         _categoryName(currentSpace),
         style: const TextStyle(
           fontFamily: 'Roboto',
-          color: Color(0xFF1E1B2E),
+          color: Color(0xFF26204A),
           fontSize: 10.5,
           fontWeight: FontWeight.w700,
         ),
@@ -352,7 +493,7 @@ class _SiteVisitViewState extends State<SiteVisitView> {
                   currentSpace.name,
                   style: const TextStyle(
                     fontFamily: 'Roboto',
-                    color: Color(0xFF1E1B2E),
+                    color: Color(0xFF26204A),
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                     height: 1.2,
@@ -481,13 +622,13 @@ class _SiteVisitViewState extends State<SiteVisitView> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 16, color: const Color(0xFF5B4FE9)),
+          Icon(icon, size: 16, color: const Color(0xFF26204A)),
           const SizedBox(height: 3),
           Text(
             value,
             style: const TextStyle(
               fontFamily: 'Roboto',
-              color: Color(0xFF1E1B2E),
+              color: Color(0xFF26204A),
               fontSize: 14,
               fontWeight: FontWeight.w700,
               height: 1.15,
@@ -660,7 +801,7 @@ class _SiteVisitViewState extends State<SiteVisitView> {
                               },
                               style: const TextStyle(
                                 fontFamily: 'Roboto',
-                                color: Color(0xFF1E1B2E),
+                                color: Color(0xFF26204A),
                                 fontSize: 12.5,
                               ),
                               decoration: InputDecoration(
@@ -693,7 +834,7 @@ class _SiteVisitViewState extends State<SiteVisitView> {
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(9),
                                   borderSide: const BorderSide(
-                                    color: Color(0xFF5B4FE9),
+                                    color: Color(0xFF26204A),
                                   ),
                                 ),
                                 errorBorder: OutlineInputBorder(
@@ -734,11 +875,11 @@ class _SiteVisitViewState extends State<SiteVisitView> {
                               icon: const Icon(
                                 Icons.keyboard_arrow_down_rounded,
                                 size: 16,
-                                color: Color(0xFF1E1B2E),
+                                color: Color(0xFF26204A),
                               ),
                               style: const TextStyle(
                                 fontFamily: 'Roboto',
-                                color: Color(0xFF1E1B2E),
+                                color: Color(0xFF26204A),
                                 fontSize: 11.3,
                                 fontWeight: FontWeight.w400,
                               ),
@@ -749,7 +890,7 @@ class _SiteVisitViewState extends State<SiteVisitView> {
                                     'AM',
                                     style: TextStyle(
                                       fontFamily: 'Roboto',
-                                      color: Color(0xFF1E1B2E),
+                                      color: Color(0xFF26204A),
                                       fontSize: 11.3,
                                       fontWeight: FontWeight.w400,
                                     ),
@@ -761,7 +902,7 @@ class _SiteVisitViewState extends State<SiteVisitView> {
                                     'PM',
                                     style: TextStyle(
                                       fontFamily: 'Roboto',
-                                      color: Color(0xFF1E1B2E),
+                                      color: Color(0xFF26204A),
                                       fontSize: 11.3,
                                       fontWeight: FontWeight.w400,
                                     ),
@@ -770,6 +911,20 @@ class _SiteVisitViewState extends State<SiteVisitView> {
                               ],
                               onChanged: (value) {
                                 if (value == null) return;
+                                if (dateController.text.isNotEmpty &&
+                                    timeController.text.isNotEmpty &&
+                                    _isDateTimeInPast(
+                                      dateController.text,
+                                      _to24Hour(timeController.text, value),
+                                    )) {
+                                  _showAppAlert(
+                                    title: 'Invalid Time',
+                                    message:
+                                        'Selected visit time has already passed. Please choose a future time.',
+                                    isSuccess: false,
+                                  );
+                                  return;
+                                }
                                 setState(() => selectedPeriod = value);
                               },
                             ),
@@ -832,156 +987,188 @@ class _SiteVisitViewState extends State<SiteVisitView> {
   // ============================================================
 
   Widget _buildRelatedSpaces() {
+    if (!Get.isRegistered<SpacesController>() || space == null) {
+      return const SizedBox.shrink();
+    }
+
+    final current = space!;
+    final related = Get.find<SpacesController>()
+        .spaces
+        .where(
+          (item) =>
+              item.id != current.id &&
+              item.isActive &&
+              item.isChamber == current.isChamber,
+        )
+        .take(5)
+        .toList();
+
+    if (related.isEmpty) return const SizedBox.shrink();
+
     return SizedBox(
       height: 204,
-      child: ListView(
+      child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        children: [
-          _relatedCard(
-            image:
-                'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d',
-            badge: 'Chamber',
-            title: 'Z FB BDN X - KYU JBM',
-            location: 'Did ch kk vnndm',
-            price: '₹652816',
-          ),
-          const SizedBox(width: 12),
-          _relatedCard(
-            image:
-                'https://images.unsplash.com/photo-1497366811353-6870744d04b2',
-            badge: 'Chamber',
-            title: 'DUE CABIN - TEST',
-            location: 'Hyderabad',
-            price: '₹50',
-          ),
-          const SizedBox(width: 12),
-          _relatedCard(
-            image:
-                'https://images.unsplash.com/photo-1497215728101-856f4ea42174',
-            badge: 'Chamber',
-            title: 'NEW DOCTOR CABIN - CABIN B',
-            location: 'Hyderabad',
-            price: '₹300',
-          ),
-        ],
+        itemCount: related.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemBuilder: (_, index) => _relatedCard(related[index]),
       ),
     );
   }
 
-  Widget _relatedCard({
-    required String image,
-    required String badge,
-    required String title,
-    required String location,
-    required String price,
-  }) {
-    return Container(
-      width: 200,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: Colors.white,
+  Widget _relatedCard(SpaceModel item) {
+    final image = item.images.isNotEmpty ? _buildMediaUrl(item.images.first) : '';
+    final badge = item.isChamber
+        ? 'Chamber'
+        : item.isCafe
+            ? 'Cafe'
+            : item.isExclusive
+                ? 'Private'
+                : 'Co-Working';
+    final price = item.price % 1 == 0
+        ? '₹${item.price.toStringAsFixed(0)}'
+        : '₹${item.price.toStringAsFixed(2)}';
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          Get.offNamed(
+            AppRoutes.spaceDetails,
+            arguments: item,
+            preventDuplicates: false,
+          );
+        },
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE7E7F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Stack(
+        child: Container(
+          width: 200,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE7E7F0)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Image.network(
-                image,
-                width: 200,
-                height: 110,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  height: 110,
-                  color: AppColors.softPurple,
-                  alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.image_not_supported_outlined,
-                    color: AppColors.lightPrimary,
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 8,
-                top: 8,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xF2FFFFFF),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    badge,
-                    style: const TextStyle(
-                      fontFamily: 'Roboto',
-                      color: Color(0xFF1E1B2E),
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w700,
+              Stack(
+                children: [
+                  image.isNotEmpty
+                      ? CachedNetworkImage(
+                          imageUrl: image,
+                          width: 200,
+                          height: 110,
+                          fit: BoxFit.cover,
+                          fadeInDuration: Duration.zero,
+                          memCacheWidth: 400,
+                          placeholder: (_, __) => const AppShimmerBox(
+                            width: double.infinity,
+                            height: 110,
+                            borderRadius: 0,
+                          ),
+                          errorWidget: (_, __, ___) => Container(
+                            height: 110,
+                            color: AppColors.softPurple,
+                            alignment: Alignment.center,
+                            child: const Icon(
+                              Icons.image_not_supported_outlined,
+                              color: AppColors.lightPrimary,
+                            ),
+                          ),
+                        )
+                      : Container(
+                          height: 110,
+                          color: AppColors.softPurple,
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.image_not_supported_outlined,
+                            color: AppColors.lightPrimary,
+                          ),
+                        ),
+                  Positioned(
+                    left: 8,
+                    top: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xF2FFFFFF),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        badge,
+                        style: const TextStyle(
+                          fontFamily: 'Roboto',
+                          color: Color(0xFF26204A),
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                   ),
+                ],
+              ),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Roboto',
+                        color: Color(0xFF26204A),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      item.address,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Roboto',
+                        color: Color(0xFF8A8A99),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Text(
+                          price,
+                          style: const TextStyle(
+                            fontFamily: 'Roboto',
+                            color: Color(0xFF26204A),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Text(
+                          '/ hr',
+                          style: TextStyle(
+                            fontFamily: 'Roboto',
+                            color: Color(0xFF8A8A99),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontFamily: 'Roboto',
-                    color: Color(0xFF1E1B2E),
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  location,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontFamily: 'Roboto',
-                    color: Color(0xFF8A8A99),
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Text(
-                      price,
-                      style: const TextStyle(
-                        fontFamily: 'Roboto',
-                        color: Color(0xFF1E1B2E),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Text(
-                      '/ hr',
-                      style: TextStyle(
-                        fontFamily: 'Roboto',
-                        color: Color(0xFF8A8A99),
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1013,7 +1200,7 @@ class _SiteVisitViewState extends State<SiteVisitView> {
                 height: 32,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF5B4FE9),
+                  color: const Color(0xFF26204A),
                   borderRadius: BorderRadius.circular(9),
                 ),
                 child: Icon(icon, color: Colors.white, size: 15),
@@ -1023,7 +1210,7 @@ class _SiteVisitViewState extends State<SiteVisitView> {
                 title,
                 style: const TextStyle(
                   fontFamily: 'Roboto',
-                  color: Color(0xFF1E1B2E),
+                  color: Color(0xFF26204A),
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.39,
@@ -1072,7 +1259,7 @@ class _SiteVisitViewState extends State<SiteVisitView> {
             validator: validator,
             style: const TextStyle(
               fontFamily: 'Roboto',
-              color: Color(0xFF1E1B2E),
+              color: Color(0xFF26204A),
               fontSize: 12.5,
             ),
             decoration: InputDecoration(
@@ -1101,7 +1288,7 @@ class _SiteVisitViewState extends State<SiteVisitView> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(9),
-                borderSide: const BorderSide(color: Color(0xFF5B4FE9)),
+                borderSide: const BorderSide(color: Color(0xFF26204A)),
               ),
               errorBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(9),
@@ -1125,20 +1312,21 @@ class _SiteVisitViewState extends State<SiteVisitView> {
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
 
     final result = await showDatePicker(
       context: context,
-      initialDate: now,
-      firstDate: now,
-      lastDate: DateTime(now.year + 2),
+      initialDate: today,
+      firstDate: today,
+      lastDate: DateTime.now().add(const Duration(days: 365)),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Color(0xFF5B4FE9),
+              primary: Color(0xFF26204A),
               onPrimary: Colors.white,
               surface: Colors.white,
-              onSurface: Color(0xFF1E1B2E),
+              onSurface: Color(0xFF26204A),
             ),
             dialogBackgroundColor: Colors.white,
           ),
@@ -1155,6 +1343,15 @@ class _SiteVisitViewState extends State<SiteVisitView> {
           '${result.month.toString().padLeft(2, '0')}-'
           '${result.year}';
     });
+
+    if (timeController.text.isNotEmpty && _isVisitDateTimeInPast()) {
+      _showAppAlert(
+        title: 'Invalid Time',
+        message:
+            'Selected visit time has already passed for this date. Please choose a future time.',
+        isSuccess: false,
+      );
+    }
   }
 
   Future<void> _pickTime() async {
@@ -1165,18 +1362,18 @@ class _SiteVisitViewState extends State<SiteVisitView> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Color(0xFF5B4FE9),
+              primary: Color(0xFF26204A),
               onPrimary: Colors.white,
               surface: Colors.white,
-              onSurface: Color(0xFF1E1B2E),
+              onSurface: Color(0xFF26204A),
             ),
             timePickerTheme: TimePickerThemeData(
               backgroundColor: Colors.white,
               hourMinuteColor: const Color(0xFFF1F0FD),
-              hourMinuteTextColor: const Color(0xFF5B4FE9),
+              hourMinuteTextColor: const Color(0xFF26204A),
               dayPeriodColor: WidgetStateColor.resolveWith((states) {
                 if (states.contains(WidgetState.selected)) {
-                  return const Color(0xFF5B4FE9);
+                  return const Color(0xFF26204A);
                 }
                 return const Color(0xFFF1F0FD);
               }),
@@ -1184,13 +1381,13 @@ class _SiteVisitViewState extends State<SiteVisitView> {
                 if (states.contains(WidgetState.selected)) {
                   return Colors.white;
                 }
-                return const Color(0xFF5B4FE9);
+                return const Color(0xFF26204A);
               }),
               dayPeriodBorderSide: const BorderSide(color: Color(0xFFE7E7F0)),
               dialBackgroundColor: const Color(0xFFFAFAFC),
-              dialHandColor: const Color(0xFF5B4FE9),
-              dialTextColor: const Color(0xFF1E1B2E),
-              entryModeIconColor: const Color(0xFF5B4FE9),
+              dialHandColor: const Color(0xFF26204A),
+              dialTextColor: const Color(0xFF26204A),
+              entryModeIconColor: const Color(0xFF26204A),
             ),
             dialogBackgroundColor: Colors.white,
           ),
@@ -1201,15 +1398,29 @@ class _SiteVisitViewState extends State<SiteVisitView> {
 
     if (result == null) return;
 
+    final displayHour =
+        result.hourOfPeriod == 0 ? 12 : result.hourOfPeriod;
+    final timeText =
+        '$displayHour:${result.minute.toString().padLeft(2, '0')}';
+    final period = result.period == DayPeriod.am ? 'AM' : 'PM';
+
+    if (dateController.text.isNotEmpty &&
+        _isDateTimeInPast(
+          dateController.text,
+          _to24Hour(timeText, period),
+        )) {
+      _showAppAlert(
+        title: 'Invalid Time',
+        message:
+            'Selected visit time has already passed. Please choose a future time.',
+        isSuccess: false,
+      );
+      return;
+    }
+
     setState(() {
-      final displayHour =
-          result.hourOfPeriod == 0 ? 12 : result.hourOfPeriod;
-
-      timeController.text =
-          '$displayHour:'
-          '${result.minute.toString().padLeft(2, '0')}';
-
-      selectedPeriod = result.period == DayPeriod.am ? 'AM' : 'PM';
+      timeController.text = timeText;
+      selectedPeriod = period;
     });
   }
 
@@ -1219,16 +1430,17 @@ class _SiteVisitViewState extends State<SiteVisitView> {
 
   Future<void> _confirmVisit() async {
     if (isSubmitting) return;
+    FocusManager.instance.primaryFocus?.unfocus();
 
     if (!(formKey.currentState?.validate() ?? false)) return;
 
     if (space == null) return;
 
     if (StorageService.userId.trim().isEmpty) {
-      Get.snackbar(
-        'Session Error',
-        'User session not found. Please login again.',
-        snackPosition: SnackPosition.BOTTOM,
+      _showAppAlert(
+        title: 'Session Error',
+        message: 'User session not found. Please login again.',
+        isSuccess: false,
       );
       return;
     }
@@ -1237,10 +1449,20 @@ class _SiteVisitViewState extends State<SiteVisitView> {
     final startTime = _to24Hour(timeController.text, selectedPeriod);
 
     if (startDate.isEmpty || startTime.isEmpty) {
-      Get.snackbar(
-        'Invalid Visit Time',
-        'Please select a valid date and time.',
-        snackPosition: SnackPosition.BOTTOM,
+      _showAppAlert(
+        title: 'Invalid Visit Time',
+        message: 'Please select a valid date and time.',
+        isSuccess: false,
+      );
+      return;
+    }
+
+    if (_isVisitDateTimeInPast()) {
+      _showAppAlert(
+        title: 'Invalid Time',
+        message:
+            'Selected visit time has already passed. Please choose a future time.',
+        isSuccess: false,
       );
       return;
     }
@@ -1248,7 +1470,7 @@ class _SiteVisitViewState extends State<SiteVisitView> {
     try {
       setState(() => isSubmitting = true);
 
-      final response = await _bookingService.createVisit(
+      await _bookingService.createVisit(
         cabinId: space!.id,
         name: visitorNameController.text.trim(),
         mobile: mobileController.text.trim(),
@@ -1259,35 +1481,155 @@ class _SiteVisitViewState extends State<SiteVisitView> {
 
       if (!mounted) return;
 
-      final message = response['message']?.toString() ??
-          'Site visit scheduled successfully.';
+      if (Get.isRegistered<BookingsController>()) {
+        final bc = Get.find<BookingsController>();
+        bc.changeBookingTab(1);
+        bc.loadSiteVisits();
+      }
 
-      final navigationController = Get.find<NavigationController>();
-      navigationController.changeTab(3);
+      FocusManager.instance.primaryFocus?.unfocus();
 
-      Get.until(
-        (route) => route.settings.name == AppRoutes.dashboard,
-      );
+      final s = space!;
+      final gallery = s.images
+          .map(_buildMediaUrl)
+          .where((u) => u.isNotEmpty)
+          .toList();
 
-      Get.snackbar(
-        'Visit Confirmed',
-        message,
-        snackPosition: SnackPosition.BOTTOM,
-        duration: const Duration(seconds: 4),
+      if (Get.isRegistered<NotificationController>()) {
+        Get.find<NotificationController>().refreshQuietly();
+      }
+
+      await BookingSuccessDialog.show(
+        headerTitle: 'Visit Scheduled',
+        congratsTitle: 'Visit Scheduled!',
+        congratsSubtitle:
+            'You successfully scheduled your site visit. Enjoy our service!',
+        spaceName: s.name,
+        location: s.address,
+        dateText: dateController.text.trim(),
+        timeText: '${timeController.text.trim()} $selectedPeriod',
+        peopleText: '',
+        bookingId: 'VISIT${DateTime.now().millisecondsSinceEpoch % 1000000}',
+        hourlyRateText: _formatPrice(s.price),
+        totalAmountText: '',
+        imageUrl: gallery.isEmpty ? '' : gallery.first,
+        primaryActionLabel: 'View Visits',
+        showInvoice: false,
+        showPaymentAndTotal: false,
+        onViewBooking: () {
+          if (Get.isRegistered<BookingsController>()) {
+            final bc = Get.find<BookingsController>();
+            bc.changeBookingTab(1);
+          }
+          if (Get.isRegistered<NavigationController>()) {
+            Get.find<NavigationController>().changeTab(2);
+          }
+          Get.until((route) => route.settings.name == AppRoutes.dashboard);
+        },
       );
     } catch (e) {
       if (!mounted) return;
 
-      Get.snackbar(
-        'Visit Failed',
-        e.toString().replaceFirst('Exception: ', ''),
-        snackPosition: SnackPosition.BOTTOM,
+      _showAppAlert(
+        title: 'Visit Failed',
+        message: e.toString().replaceFirst('Exception: ', ''),
+        isSuccess: false,
       );
     } finally {
       if (mounted) {
         setState(() => isSubmitting = false);
       }
     }
+  }
+
+  void _showAppAlert({
+    required String title,
+    required String message,
+    bool isSuccess = false,
+  }) {
+    final accent =
+        isSuccess ? const Color(0xFF16803C) : const Color(0xFFDC2626);
+    final softBg =
+        isSuccess ? const Color(0xFFEAFBF0) : const Color(0xFFFFF1F2);
+
+    if (Get.isSnackbarOpen) Get.closeCurrentSnackbar();
+
+    Get.rawSnackbar(
+      snackPosition: SnackPosition.TOP,
+      backgroundColor: softBg,
+      borderRadius: 14,
+      margin: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      duration: const Duration(seconds: 3),
+      animationDuration: const Duration(milliseconds: 420),
+      forwardAnimationCurve: Curves.easeOutCubic,
+      reverseAnimationCurve: Curves.easeInCubic,
+      borderColor: accent.withValues(alpha: 0.35),
+      borderWidth: 1,
+      boxShadows: [
+        BoxShadow(
+          color: const Color(0xFF26204A).withValues(alpha: 0.06),
+          blurRadius: 16,
+          offset: const Offset(0, 4),
+        ),
+      ],
+      icon: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.12),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          isSuccess ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+          color: accent,
+          size: 18,
+        ),
+      ),
+      titleText: Text(
+        title,
+        style: TextStyle(
+          color: accent,
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      messageText: Text(
+        message,
+        style: const TextStyle(
+          color: Color(0xFF26204A),
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  bool _isVisitDateTimeInPast() {
+    final t24 = _to24Hour(timeController.text, selectedPeriod);
+    return _isDateTimeInPast(dateController.text, t24);
+  }
+
+  bool _isDateTimeInPast(String uiDate, String time24) {
+    final date = _parseUiDate(uiDate);
+    if (date == null || time24.isEmpty) return false;
+    final parts = time24.split(':');
+    if (parts.length != 2) return false;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return false;
+    final selected = DateTime(date.year, date.month, date.day, hour, minute);
+    return !selected.isAfter(DateTime.now());
+  }
+
+  DateTime? _parseUiDate(String value) {
+    final parts = value.split('-');
+    if (parts.length != 3) return null;
+    final d = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    final y = int.tryParse(parts[2]);
+    if (d == null || m == null || y == null) return null;
+    return DateTime(y, m, d);
   }
 
   // ============================================================
@@ -1384,6 +1726,114 @@ class _SiteVisitViewState extends State<SiteVisitView> {
         Icons.image_not_supported_outlined,
         color: AppColors.lightPrimary,
         size: 36,
+      ),
+    );
+  }
+}
+
+class _SiteVisitImageViewer extends StatefulWidget {
+  const _SiteVisitImageViewer({
+    required this.images,
+    required this.initialIndex,
+  });
+
+  final List<String> images;
+  final int initialIndex;
+
+  @override
+  State<_SiteVisitImageViewer> createState() => _SiteVisitImageViewerState();
+}
+
+class _SiteVisitImageViewerState extends State<_SiteVisitImageViewer> {
+  late int _index;
+  late final PageController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.initialIndex;
+    _controller = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            PageView.builder(
+              controller: _controller,
+              itemCount: widget.images.length,
+              onPageChanged: (i) => setState(() => _index = i),
+              itemBuilder: (_, i) {
+                return InteractiveViewer(
+                  minScale: 1,
+                  maxScale: 4,
+                  child: Center(
+                    child: CachedNetworkImage(
+                      imageUrl: widget.images[i],
+                      fit: BoxFit.contain,
+                      width: double.infinity,
+                      height: double.infinity,
+                      fadeInDuration: Duration.zero,
+                      fadeOutDuration: Duration.zero,
+                      placeholder: (_, __) => const Center(
+                        child: CircularProgressIndicator(
+                          color: Colors.white70,
+                          strokeWidth: 2,
+                        ),
+                      ),
+                      errorWidget: (_, __, ___) => const Icon(
+                        Icons.broken_image_outlined,
+                        color: Colors.white54,
+                        size: 48,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Material(
+                color: Colors.white.withValues(alpha: 0.14),
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () => Navigator.of(context).pop(),
+                  child: const SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: Icon(Icons.close_rounded, color: Colors.white),
+                  ),
+                ),
+              ),
+            ),
+            if (widget.images.length > 1)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 18,
+                child: Text(
+                  '${_index + 1} / ${widget.images.length}',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

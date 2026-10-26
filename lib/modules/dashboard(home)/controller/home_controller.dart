@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:iryax_spaces/modules/bookings/controller/bookings_controller.dart';
 import 'package:iryax_spaces/modules/bookings/model/booking_model.dart';
@@ -71,19 +70,7 @@ class HomeController extends GetxController {
     try {
       final data = await _dashboardService.getUserDashboard();
       _applyDashboardPayload(data);
-
-      debugPrint('DASHBOARD TOTAL: ${totalBookings.value}');
-      debugPrint(
-        'DASHBOARD STATUS: '
-        'pending=${pendingBookings.value}, '
-        'confirmed=${confirmedBookings.value}, '
-        'active=${activeBookings.value}, '
-        'completed=${completedBookings.value}, '
-        'cancelled=${cancelledBookings.value}',
-      );
     } catch (e) {
-      debugPrint('DASHBOARD ERROR: $e');
-
       // Already showing bookings? Ignore timeout — UI already has data.
       if (totalBookings.value > 0 || _paintedFromBookings) {
         errorMessage.value = null;

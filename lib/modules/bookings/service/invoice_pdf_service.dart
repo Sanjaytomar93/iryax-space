@@ -9,6 +9,7 @@ import 'package:printing/printing.dart';
 import 'package:iryax_spaces/app/themes/app_colors.dart';
 import 'package:iryax_spaces/core/services/storage_service.dart';
 import 'package:iryax_spaces/modules/bookings/model/booking_model.dart';
+import 'package:iryax_spaces/modules/bookings/service/file_download_helper.dart';
 
 class InvoicePdfService {
   // ─── Palette ─────────────────────────────────────────────
@@ -22,9 +23,7 @@ class InvoicePdfService {
   static const _totalBlue  = PdfColor.fromInt(0xFF2563EB);
 
   // ─── Rupee helper — avoids broken glyph ─────────────────
-  // NotoSans supports ₹ (U+20B9). We pass the font everywhere.
-  static String _rs(String amount) => 'Rs. $amount';
-  static String _rsAmt(double v)   => 'Rs. ${v.toStringAsFixed(2)}';
+  static String _rsAmt(double v) => 'Rs. ${v.toStringAsFixed(2)}';
 
   // ─── Status helpers ──────────────────────────────────────
   static PdfColor _statusBg(BookingStatus s) {
@@ -98,22 +97,50 @@ class InvoicePdfService {
     );
   }
 
-  // ─── Share/Download directly (used from booking details dialog) ──
-  static Future<void> downloadAndShare(BookingModel booking) async {
+  static final Set<String> _downloadingIds = <String>{};
+
+  // ─── Direct Download (MakeMyTrip style: save to device & notify) ──
+  static Future<void> downloadInvoice(BookingModel booking) async {
+    if (_downloadingIds.contains(booking.id)) return;
+    _downloadingIds.add(booking.id);
+
     try {
+      final fileName = _fileName(booking);
       final bytes = await _buildPdf(booking);
-      await Printing.sharePdf(bytes: bytes, filename: _fileName(booking));
+
+      final savedFile = await FileDownloadHelper.saveFile(
+        fileName: fileName,
+        bytes: bytes,
+        mimeType: 'application/pdf',
+      );
+
+      final folderName =
+          savedFile.path.contains('Download') ? 'Downloads' : 'Documents';
+
+      FileDownloadHelper.showDownloadedNotification(
+        fileName: fileName,
+        folderName: folderName,
+        filePath: savedFile.path,
+        mimeType: 'application/pdf',
+        onView: () => previewInvoice(booking),
+      );
     } catch (e) {
       Get.snackbar(
         'Error',
-        'Invoice generate karne mein dikkat aayi. Dobara try karein.',
+        'Invoice download fail ho gaya. Dobara try karein.',
         snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: const Color(0xFF1E1B2E),
+        backgroundColor: const Color(0xFF26204A),
         colorText: Colors.white,
         margin: const EdgeInsets.all(12),
       );
+    } finally {
+      _downloadingIds.remove(booking.id);
     }
   }
+
+  // Alias for backward compatibility with callers
+  static Future<void> downloadAndShare(BookingModel booking) =>
+      downloadInvoice(booking);
 
   static String _fileName(BookingModel b) {
     final ref = b.id.length > 8
@@ -147,26 +174,51 @@ class InvoicePdfService {
         ? b.id.substring(b.id.length - 8).toUpperCase()
         : (b.id.isNotEmpty ? b.id.toUpperCase() : 'BOOKING');
 
-    final rawAmt =
-        double.tryParse(b.amount.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
-    final subtotal = rawAmt > 0 ? rawAmt / 1.18 : 0.0;
-    final gst      = rawAmt > 0 ? rawAmt - subtotal : 0.0;
+    final hours = b.totalHours > 0 ? b.totalHours : 0.0;
+    final days = b.totalDays > 0 ? b.totalDays : 1;
+    final daily = b.dailyHours;
+    final rate = b.hourlyRate;
+    final subtotal = b.subtotalAmount;
+    final seatCharge = b.extraCharge;
+    final gst = b.gstAmount;
+    final total = b.computedTotal > 0
+        ? b.computedTotal
+        : (double.tryParse(b.amount.replaceAll(RegExp(r'[^\d.]'), '')) ?? 0.0);
 
-    final endDate = b.endDate.isNotEmpty ? b.endDate : b.startDate;
-    final endTime = b.endTime.isNotEmpty ? b.endTime : b.startTime;
+    final brand = b.spaceName.isNotEmpty ? b.spaceName.toLowerCase() : 'iryax space';
+    final city = b.city.isNotEmpty
+        ? b.city.toLowerCase()
+        : (b.location.isNotEmpty
+            ? b.location.split(',').first.trim().toLowerCase()
+            : 'india');
+    final txn = b.transactionId.isNotEmpty
+        ? b.transactionId
+        : (b.paymentMode == PaymentMode.cash
+            ? 'CASH_$bookingRef'
+            : 'N/A');
+    final seatsLabel = b.selectedSeats.isNotEmpty
+        ? b.selectedSeats.join(', ')
+        : (b.seats > 0 ? 'Seat 1 (#1)' : 'N/A');
 
-    // Amount display: strip ₹ from model string & prefix with "Rs."
-    final totalDisplay = b.amount.isNotEmpty
-        ? _rs(b.amount.replaceAll(RegExp(r'[₹Rs.]'), '').trim())
-        : 'Rs. 0';
+    final custName = b.customerName.isNotEmpty
+        ? b.customerName
+        : (StorageService.userName.isNotEmpty
+            ? StorageService.userName
+            : 'Customer');
+    final custMobile = b.customerMobile.isNotEmpty
+        ? b.customerMobile
+        : StorageService.userMobile;
+    final custEmail = b.customerEmail.isNotEmpty
+        ? b.customerEmail
+        : StorageService.userEmail;
 
     doc.addPage(pw.Page(
       pageFormat: PdfPageFormat.a4,
-      margin: const pw.EdgeInsets.all(36),
+      margin: const pw.EdgeInsets.all(32),
       build: (_) => pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          // ── Header ───────────────────────────────────────
+          // Header — brand left, date right (image-2 style)
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -174,221 +226,281 @@ class InvoicePdfService {
               pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Text('IRYAX SPACE', style: tsB(size: 22)),
+                  pw.Text(brand, style: tsB(size: 22)),
                   pw.SizedBox(height: 2),
-                  pw.Text('Premium Workspaces', style: ts(size: 11, color: _textSec)),
+                  pw.Text(city, style: ts(size: 11, color: _textSec)),
                   pw.SizedBox(height: 6),
                   pw.Container(
-                    padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
                     decoration: pw.BoxDecoration(
                       color: _whisper,
                       border: pw.Border.all(color: _border),
-                      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+                      borderRadius:
+                          const pw.BorderRadius.all(pw.Radius.circular(6)),
                     ),
-                    child: pw.Text('CO-WORKING SPACE',
-                        style: tsB(size: 9, color: _textMuted)),
+                    child: pw.Text(
+                      b.shortTypeLabel.toUpperCase(),
+                      style: tsB(size: 8.5, color: _textMuted),
+                    ),
                   ),
                 ],
               ),
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.end,
-                children: [
-                  pw.Text('INVOICE', style: tsB(size: 20, color: _blue)),
-                  pw.SizedBox(height: 4),
-                  pw.Text('#$bookingRef', style: ts(size: 11, color: _textMuted)),
-                  pw.SizedBox(height: 2),
-                  pw.Text(_todayDate(), style: ts(size: 10, color: _textSec)),
-                ],
+              pw.Text(
+                b.startDate.isNotEmpty ? b.startDate : _todayDate(),
+                style: ts(size: 11, color: _textSec),
               ),
             ],
           ),
 
-          pw.SizedBox(height: 18),
-          pw.Divider(color: _border, thickness: 0.8),
-          pw.SizedBox(height: 14),
+          pw.SizedBox(height: 12),
+          pw.Divider(color: _border, thickness: 1),
+          pw.SizedBox(height: 12),
 
-          // ── Bill To & Cabin ───────────────────────────────
+          // Bill To + Cabin
           pw.Row(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              // Bill To
-              pw.Expanded(child: _card(pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  _label('BILL TO', tsB),
-                  pw.SizedBox(height: 6),
-                  pw.Text(
-                    b.customerName.isNotEmpty
-                        ? b.customerName
-                        : (StorageService.userName.isNotEmpty
-                            ? StorageService.userName
-                            : 'Customer'),
-                    style: tsB(size: 13),
-                  ),
-                  if (b.customerMobile.isNotEmpty || StorageService.userMobile.isNotEmpty) ...[
+              pw.Expanded(
+                child: _card(pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    _label('BILL TO', tsB),
+                    pw.SizedBox(height: 6),
+                    pw.Text(custName, style: tsB(size: 12)),
+                    if (custMobile.isNotEmpty) ...[
+                      pw.SizedBox(height: 3),
+                      pw.Text(custMobile, style: ts(size: 10, color: _textSec)),
+                    ],
+                    if (custEmail.isNotEmpty) ...[
+                      pw.SizedBox(height: 2),
+                      pw.Text(custEmail, style: ts(size: 10, color: _textSec)),
+                    ],
+                  ],
+                )),
+              ),
+              pw.SizedBox(width: 12),
+              pw.Expanded(
+                child: _card(pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    _label('CABIN DETAILS', tsB),
+                    pw.SizedBox(height: 6),
+                    pw.Text(
+                      b.spaceName.isNotEmpty ? b.spaceName : 'Workspace',
+                      style: tsB(size: 12),
+                    ),
                     pw.SizedBox(height: 3),
                     pw.Text(
-                      b.customerMobile.isNotEmpty
-                          ? b.customerMobile
-                          : StorageService.userMobile,
+                      b.location.isNotEmpty ? b.location : city,
+                      style: ts(size: 10, color: _textSec),
+                    ),
+                    pw.SizedBox(height: 2),
+                    pw.Text(
+                      'Capacity: ${b.capacity > 0 ? b.capacity : b.seats} seats | Type: ${b.cabinKind}',
                       style: ts(size: 10, color: _textSec),
                     ),
                   ],
-                  if (b.customerEmail.isNotEmpty || StorageService.userEmail.isNotEmpty) ...[
-                    pw.SizedBox(height: 3),
-                    pw.Text(
-                      b.customerEmail.isNotEmpty
-                          ? b.customerEmail
-                          : StorageService.userEmail,
-                      style: ts(size: 10, color: _textSec),
-                    ),
-                  ],
-                ],
-              ))),
-              pw.SizedBox(width: 14),
-              // Cabin
-              pw.Expanded(child: _card(pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  _label('CABIN DETAILS', tsB),
-                  pw.SizedBox(height: 6),
-                  pw.Text(b.spaceName.isNotEmpty ? b.spaceName : 'Workspace',
-                      style: tsB(size: 13)),
-                  pw.SizedBox(height: 3),
-                  pw.Text(b.location.isNotEmpty ? b.location : 'N/A',
-                      style: ts(size: 10, color: _textSec)),
-                  pw.SizedBox(height: 2),
-                  pw.Text(
-                    'Capacity: N/A seats | Type: ${b.spaceType.isNotEmpty ? b.spaceType : 'Normal'}',
-                    style: ts(size: 10, color: _textSec),
-                  ),
-                ],
-              ))),
+                )),
+              ),
             ],
           ),
 
-          pw.SizedBox(height: 12),
+          pw.SizedBox(height: 10),
 
-          // ── Start & End ───────────────────────────────────
+          // Start / End
           _card(pw.Row(children: [
-            pw.Expanded(child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                _label('START', tsB),
-                pw.SizedBox(height: 4),
-                pw.Text(b.startDate.isNotEmpty ? b.startDate : '--',
-                    style: tsB(size: 12)),
-                if (b.startTime.isNotEmpty)
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  _label('START', tsB),
+                  pw.SizedBox(height: 4),
+                  pw.Text(b.startDate, style: tsB(size: 11)),
                   pw.Text(b.startTime, style: ts(size: 10, color: _textSec)),
-              ],
-            )),
-            pw.Padding(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 10),
-              child: pw.Text('-->',
-                  style: ts(size: 13, color: _textMuted)),
+                ],
+              ),
             ),
-            pw.Expanded(child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                _label('END', tsB),
-                pw.SizedBox(height: 4),
-                pw.Text(endDate.isNotEmpty ? endDate : '--',
-                    style: tsB(size: 12)),
-                if (endTime.isNotEmpty)
-                  pw.Text(endTime, style: ts(size: 10, color: _textSec)),
-              ],
-            )),
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  _label('END', tsB),
+                  pw.SizedBox(height: 4),
+                  pw.Text(b.endDate, style: tsB(size: 11)),
+                  pw.Text(b.endTime, style: ts(size: 10, color: _textSec)),
+                ],
+              ),
+            ),
           ])),
 
-          pw.SizedBox(height: 12),
+          pw.SizedBox(height: 10),
 
-          // ── Booking Info ──────────────────────────────────
-          _card(pw.Column(
+          // Metrics
+          _card(pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              _infoCol('TOTAL HOURS', hours > 0 ? '$hours' : b.duration, ts, tsB),
+              _infoCol('TOTAL DAYS', '$days days', ts, tsB),
+              _infoCol('DAILY HOURS', daily > 0 ? '$daily' : '—', ts, tsB),
+              _infoCol('BOOKING TYPE', b.bookingBasis, ts, tsB),
+            ],
+          )),
+
+          pw.SizedBox(height: 10),
+
+          // Slots + Seats
+          pw.Row(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              _label('BOOKING INFORMATION', tsB),
+              pw.Expanded(
+                child: _card(pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    _label('BOOKING SLOTS ($days DAYS)', tsB),
+                    pw.SizedBox(height: 6),
+                    pw.Text(b.startDate, style: tsB(size: 11)),
+                    pw.Text(
+                      '${b.startTime} - ${b.endTime}',
+                      style: ts(size: 10, color: _textSec),
+                    ),
+                    pw.SizedBox(height: 4),
+                    pw.Text(
+                      'Daily Hours: ${daily > 0 ? daily : hours}',
+                      style: ts(size: 10, color: _textSec),
+                    ),
+                  ],
+                )),
+              ),
+              pw.SizedBox(width: 12),
+              pw.Expanded(
+                child: _card(pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    _label(
+                      'SELECTED SEATS (${b.selectedSeats.isNotEmpty ? b.selectedSeats.length : b.seats})',
+                      tsB,
+                    ),
+                    pw.SizedBox(height: 6),
+                    pw.Text(seatsLabel, style: tsB(size: 11)),
+                    pw.SizedBox(height: 4),
+                    pw.Text(
+                      'Extra Charge: ${_rsAmt(seatCharge)}',
+                      style: ts(size: 10, color: _textSec),
+                    ),
+                  ],
+                )),
+              ),
+            ],
+          ),
+
+          pw.SizedBox(height: 10),
+
+          // Price table
+          _card(pw.Column(
+            children: [
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('DESCRIPTION', style: tsB(size: 9, color: _textMuted)),
+                  pw.Text('AMOUNT', style: tsB(size: 9, color: _textMuted)),
+                ],
+              ),
               pw.SizedBox(height: 8),
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  _infoCol('Total Hours',  b.duration.isNotEmpty ? b.duration : '0h', ts, tsB),
-                  _infoCol('Booking Type', 'Hourly', ts, tsB),
-                  _infoCol('Seats',        '${b.seats}', ts, tsB),
-                  _infoCol('Created',      b.createdAt.isNotEmpty ? b.createdAt : '--', ts, tsB),
+                  pw.Expanded(
+                    child: pw.Text(
+                      'Subtotal (${hours > 0 ? hours : b.duration} hours x Rs.${rate > 0 ? rate.toStringAsFixed(rate % 1 == 0 ? 0 : 2) : '0'})',
+                      style: ts(size: 10),
+                    ),
+                  ),
+                  pw.Text(_rsAmt(subtotal), style: ts(size: 10)),
                 ],
               ),
-            ],
-          )),
-
-          pw.SizedBox(height: 12),
-
-          // ── Price Breakdown ───────────────────────────────
-          _card(pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              _label('PRICE BREAKDOWN', tsB),
-              pw.SizedBox(height: 10),
+              pw.SizedBox(height: 4),
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text(
-                    'Subtotal (${b.duration.isNotEmpty ? b.duration : '0h'} x Rs.0)',
-                    style: ts(size: 11),
+                    'Seat Charges (${b.seats} seats x Rs.${seatCharge > 0 && b.seats > 0 ? (seatCharge / b.seats).toStringAsFixed(0) : '0'})',
+                    style: ts(size: 10),
                   ),
-                  pw.Text(_rsAmt(subtotal), style: ts(size: 11)),
+                  pw.Text(_rsAmt(seatCharge), style: ts(size: 10)),
                 ],
               ),
-              pw.SizedBox(height: 5),
+              pw.SizedBox(height: 4),
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  pw.Text('GST (18%)', style: ts(size: 11)),
-                  pw.Text(_rsAmt(gst),  style: ts(size: 11)),
+                  pw.Text('GST (18%)', style: ts(size: 10)),
+                  pw.Text(_rsAmt(gst), style: ts(size: 10)),
                 ],
               ),
               pw.SizedBox(height: 8),
-              pw.Divider(color: _border, thickness: 0.8),
+              pw.Divider(color: _border, thickness: 1),
               pw.SizedBox(height: 8),
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  pw.Text('Total Amount', style: tsB(size: 14)),
-                  pw.Text(totalDisplay,
-                      style: tsB(size: 16, color: _totalBlue)),
+                  pw.Text('Total Amount', style: tsB(size: 12)),
+                  pw.Text(_rsAmt(total), style: tsB(size: 13, color: _totalBlue)),
                 ],
               ),
             ],
           )),
 
-          pw.SizedBox(height: 12),
+          pw.SizedBox(height: 10),
 
-          // ── Status Strip ──────────────────────────────────
+          // Payment details
+          _card(pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text('Transaction ID: $txn', style: ts(size: 10)),
+              pw.SizedBox(height: 3),
+              pw.Text(
+                'Payment Mode: ${b.paymentMode == PaymentMode.cash ? 'Cash' : 'Online'}',
+                style: ts(size: 10),
+              ),
+            ],
+          )),
+
+          pw.SizedBox(height: 10),
+
+          // Status strip
           _card(pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
               pw.Row(children: [
-                pw.Text('Status  ', style: ts(size: 10, color: _textSec)),
-                _badge(_statusLabel(b.status), _statusBg(b.status),
-                    _statusTxt(b.status), ts, tsB),
-              ]),
-              pw.Row(children: [
-                pw.Text('Payment  ', style: ts(size: 10, color: _textSec)),
+                pw.Text('Status  ', style: ts(size: 9, color: _textSec)),
                 _badge(
-                  b.paymentMode == PaymentMode.cash ? 'Cash' : 'Online',
-                  _blueBg, _blue, ts, tsB,
+                  _statusLabel(b.status),
+                  _statusBg(b.status),
+                  _statusTxt(b.status),
+                  ts,
+                  tsB,
                 ),
               ]),
               pw.Row(children: [
-                pw.Text('Payment Status  ', style: ts(size: 10, color: _textSec)),
+                pw.Text('Payment  ', style: ts(size: 9, color: _textSec)),
                 _badge(
-                  b.paymentStatus == PaymentStatus.paid ? 'Paid' : 'Pending',
+                  b.paymentStatus == PaymentStatus.paid ? 'PAID' : 'PENDING',
                   b.paymentStatus == PaymentStatus.paid
                       ? const PdfColor.fromInt(0xFFDCFCE7)
                       : const PdfColor.fromInt(0xFFFEF3C7),
                   b.paymentStatus == PaymentStatus.paid
                       ? const PdfColor.fromInt(0xFF15803D)
                       : const PdfColor.fromInt(0xFFB45309),
-                  ts, tsB,
+                  ts,
+                  tsB,
+                ),
+              ]),
+              pw.Row(children: [
+                pw.Text('Payment Method  ', style: ts(size: 9, color: _textSec)),
+                pw.Text(
+                  b.paymentMode == PaymentMode.cash ? 'Cash' : 'Online',
+                  style: tsB(size: 10),
                 ),
               ]),
             ],
@@ -397,18 +509,21 @@ class InvoicePdfService {
           pw.Spacer(),
           pw.Divider(color: _border, thickness: 0.5),
           pw.SizedBox(height: 6),
-
-          // ── Footer ────────────────────────────────────────
-          pw.Center(child: pw.Column(children: [
-            pw.Text('IRYAX SPACE - Premium Workspaces',
-                style: tsB(size: 10), textAlign: pw.TextAlign.center),
-            pw.SizedBox(height: 3),
-            pw.Text(
-              'This is a system generated invoice. Terms & Conditions apply.',
+          pw.Center(
+            child: pw.Text(
+              '$brand — $city | Created: ${b.createdAt}',
               style: ts(size: 9, color: _textSec),
               textAlign: pw.TextAlign.center,
             ),
-          ])),
+          ),
+          pw.SizedBox(height: 4),
+          pw.Center(
+            child: pw.Text(
+              'POWERED BY IRYAX SPACE',
+              style: tsB(size: 9, color: _textMuted),
+              textAlign: pw.TextAlign.center,
+            ),
+          ),
         ],
       ),
     ));

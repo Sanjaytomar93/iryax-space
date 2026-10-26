@@ -1,20 +1,27 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iryax_spaces/app/routes/app_routes.dart';
 import 'package:iryax_spaces/core/services/storage_service.dart';
+import 'package:iryax_spaces/core/widgets/app_shimmer.dart';
+import 'package:iryax_spaces/core/widgets/detail_nav_bar.dart';
 import 'package:iryax_spaces/modules/bookings/controller/bookings_controller.dart';
+import 'package:iryax_spaces/modules/bookings/model/booking_model.dart';
 import 'package:iryax_spaces/modules/bookings/service/booking_service.dart';
 import 'package:iryax_spaces/modules/navigation/controller/navigation_controller.dart';
+import 'package:iryax_spaces/modules/notifications/controller/notification_controller.dart';
+import 'package:iryax_spaces/modules/spaces/controller/spaces_controller.dart';
 import 'package:iryax_spaces/modules/spaces/model/space_model.dart';
+import 'package:iryax_spaces/modules/spaces/widget/booking_success_dialog.dart';
 
 // ─── Figma Exact Design Colors ───────────────────────────────────────────────
 const _kPageBg       = Color(0xFFF6F6FA); // Whisper
 const _kWhite        = Color(0xFFFFFFFF);
-const _kSteelGray    = Color(0xFF1E1B2E); // Heading & Primary text
+const _kSteelGray    = Color(0xFF26204A); // Heading & Primary text
 const _kManatee      = Color(0xFF8A8A99); // Subtitle, Labels, Captions
 const _kGovBay       = Color(0xFF4338CA); // ₹2100 Price, Amenity text
 const _kJewel        = Color(0xFF16803C); // Open timing, Verified, Pay text
-const _kRoyalBlue    = Color(0xFF5B4FE9); // Icons, selected states
+const _kRoyalBlue    = Color(0xFF26204A); // Icons, selected states
 const _kAthensGray   = Color(0xFFE7E7F0); // Card border, dividers
 const _kSelago       = Color(0xFFF1F0FD); // Amenity tag bg, Terms icon bg
 const _kWhiteIce     = Color(0xFFEAFBF0); // Pay on counter card bg
@@ -27,8 +34,8 @@ const _kScheduleGold = Color(0xFF8A5B00); // Available text
 const _kInputBg      = Color(0xFFFAFAFC); // Inputs, Seat default bg
 const _kPlaceholder  = Color(0xFFB4B4C2); // French Gray for input hint
 const _kStatBg       = Color(0xFFF5F5FA); // Capacity & Space box bg
-const _kGradStart    = Color(0xFF4668F5); // Confirm btn start
-const _kGradEnd      = Color(0xFF9228F6); // Confirm btn end
+const _kGradStart    = Color(0xFF26204A); // Confirm btn start
+const _kGradEnd      = Color(0xFF3D3568); // Confirm btn end
 // ─────────────────────────────────────────────────────────────────────────────
 
 class BookSpaceView extends StatefulWidget {
@@ -52,9 +59,15 @@ class _BookSpaceViewState extends State<BookSpaceView> {
   SpaceModel? space;
   final Set<String> _selectedSeatIds = {};
   bool _acceptedTerms = false;
+  bool _termsExpanded = true;
   bool _isSubmitting  = false;
   String _startPeriod = 'AM';
   String _endPeriod   = 'PM';
+  final _termsKey = GlobalKey();
+  final _termsFieldKey = GlobalKey<FormFieldState<bool>>();
+
+  int _selectedImageIndex = 0;
+  PageController? _galleryPageController;
 
   @override
   void initState() {
@@ -63,10 +76,15 @@ class _BookSpaceViewState extends State<BookSpaceView> {
     if (args is SpaceModel) space = args;
     _fullNameController.text = StorageService.userName;
     _mobileController.text   = StorageService.userMobile;
+    _galleryPageController = PageController();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      FocusManager.instance.primaryFocus?.unfocus();
+    });
   }
 
   @override
   void dispose() {
+    _galleryPageController?.dispose();
     _fullNameController.dispose();
     _mobileController.dispose();
     _startDateController.dispose();
@@ -74,6 +92,38 @@ class _BookSpaceViewState extends State<BookSpaceView> {
     _startTimeController.dispose();
     _endTimeController.dispose();
     super.dispose();
+  }
+
+  void _goToGalleryImage(int index, int total) {
+    if (total <= 0) return;
+    final next = index.clamp(0, total - 1);
+    if (next == _selectedImageIndex) return;
+    setState(() => _selectedImageIndex = next);
+    if (_galleryPageController?.hasClients == true) {
+      _galleryPageController!.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  void _openImageViewer(List<String> images, int initialIndex) {
+    if (images.isEmpty) return;
+    final start = initialIndex.clamp(0, images.length - 1);
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black,
+        pageBuilder: (_, __, ___) => _BookSpaceImageViewer(
+          images: images,
+          initialIndex: start,
+        ),
+        transitionsBuilder: (_, animation, __, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+      ),
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -89,72 +139,76 @@ class _BookSpaceViewState extends State<BookSpaceView> {
       );
     }
 
-    return Scaffold(
-      backgroundColor: _kPageBg,
-      appBar: _buildFigmaAppBar(),
-      body: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.only(bottom: 40),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 12),
-
-              // 1. Image + Space Info card (Combined smoothly as in Figma)
-              _buildWorkspaceCard(),
-
-              const SizedBox(height: 12),
-
-              // 2. Select Seats card (if seats exist)
-              if (space!.effectiveSeats.isNotEmpty) ...[
-                _pad(_buildSelectSeatsCard()),
+    return GestureDetector(
+      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+      behavior: HitTestBehavior.translucent,
+      child: Scaffold(
+        backgroundColor: _kPageBg,
+        appBar: _buildFigmaAppBar(),
+        body: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.only(bottom: 40),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 const SizedBox(height: 12),
-              ],
 
-              // 3. Verified professional workspace badge
-              _pad(_buildVerifiedBadge()),
+                // 1. Image + Space Info card (Combined smoothly as in Figma)
+                _buildWorkspaceCard(),
 
-              const SizedBox(height: 14),
-
-              // 4. Client Credential card
-              _pad(_buildClientCredentialCard()),
-
-              const SizedBox(height: 12),
-
-              // 5. Pay on Counter card
-              _pad(_buildPayOnCounterCard()),
-
-              const SizedBox(height: 12),
-
-              // 6. Booking Schedule card
-              _pad(_buildBookingScheduleCard()),
-
-              const SizedBox(height: 12),
-
-              // 7. Daily Breakdown list (when dates are selected)
-              if (_bookingSlots.isNotEmpty) ...[
-                _pad(_buildDailyBreakdown()),
                 const SizedBox(height: 12),
+
+                // 2. Select Seats card (if seats exist)
+                if (space!.effectiveSeats.isNotEmpty) ...[
+                  _pad(_buildSelectSeatsCard()),
+                  const SizedBox(height: 12),
+                ],
+
+                // 3. Verified professional workspace badge
+                _pad(_buildVerifiedBadge()),
+
+                const SizedBox(height: 14),
+
+                // 4. Client Credential card
+                _pad(_buildClientCredentialCard()),
+
+                const SizedBox(height: 12),
+
+                // 5. Pay on Counter card
+                _pad(_buildPayOnCounterCard()),
+
+                const SizedBox(height: 12),
+
+                // 6. Booking Schedule card
+                _pad(_buildBookingScheduleCard()),
+
+                const SizedBox(height: 12),
+
+                // 7. Daily Breakdown list (when dates are selected)
+                if (_bookingSlots.isNotEmpty) ...[
+                  _pad(_buildDailyBreakdown()),
+                  const SizedBox(height: 12),
+                ],
+
+                // 8. Terms and Conditions card
+                KeyedSubtree(key: _termsKey, child: _pad(_buildTermsCard())),
+
+                const SizedBox(height: 14),
+
+                // 9. Price Summary & Confirm Button
+                _pad(_buildPriceSummaryCard()),
+
+                const SizedBox(height: 14),
+
+                _pad(_buildConfirmButton()),
+
+                const SizedBox(height: 24),
+
+                // 10. Related Spaces horizontal section
+                _buildRelatedSpacesSection(),
               ],
-
-              // 8. Terms and Conditions card
-              _pad(_buildTermsCard()),
-
-              const SizedBox(height: 14),
-
-              // 9. Price Summary & Confirm Button
-              _pad(_buildPriceSummaryCard()),
-
-              const SizedBox(height: 14),
-
-              _pad(_buildConfirmButton()),
-
-              const SizedBox(height: 24),
-
-              // 10. Related Spaces horizontal section
-              _buildRelatedSpacesSection(),
-            ],
+            ),
           ),
         ),
       ),
@@ -168,8 +222,9 @@ class _BookSpaceViewState extends State<BookSpaceView> {
   // 1. APP BAR (Figma: pure white, top radius 20, back arrow + Book Space text)
   // ═══════════════════════════════════════════════════════════════════════════
   PreferredSizeWidget _buildFigmaAppBar() {
+    final spaceName = space?.name.trim() ?? '';
     return PreferredSize(
-      preferredSize: const Size.fromHeight(50),
+      preferredSize: const Size.fromHeight(64),
       child: Container(
         decoration: const BoxDecoration(
           color: _kWhite,
@@ -177,36 +232,11 @@ class _BookSpaceViewState extends State<BookSpaceView> {
         ),
         child: SafeArea(
           bottom: false,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: Get.back,
-                  behavior: HitTestBehavior.opaque,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.arrow_back,
-                        color: _kSteelGray,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Book Space',
-                        style: const TextStyle(
-                          color: _kSteelGray,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.1,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+          child: DetailNavBar(
+            title: 'Book Space',
+            subtitle: spaceName.isNotEmpty
+                ? spaceName
+                : 'Complete your booking',
           ),
         ),
       ),
@@ -218,7 +248,11 @@ class _BookSpaceViewState extends State<BookSpaceView> {
   // ═══════════════════════════════════════════════════════════════════════════
   Widget _buildWorkspaceCard() {
     final s = space!;
-    final imageUrl = s.images.isNotEmpty ? _mediaUrl(s.images.first) : '';
+    final galleryImages = s.images
+        .map(_mediaUrl)
+        .where((url) => url.isNotEmpty)
+        .toList();
+    final multi = galleryImages.length > 1;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -232,33 +266,83 @@ class _BookSpaceViewState extends State<BookSpaceView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Top Image (Height: 180)
+            // Top Image gallery
             SizedBox(
-              height: 180,
+              height: 200,
               width: double.infinity,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (imageUrl.isNotEmpty)
-                    Image.network(
-                      imageUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _imagePlaceholder(),
-                    )
+                  if (galleryImages.isEmpty)
+                    _imagePlaceholder()
                   else
-                    _imagePlaceholder(),
+                    PageView.builder(
+                      controller: _galleryPageController,
+                      itemCount: galleryImages.length,
+                      onPageChanged: (index) {
+                        setState(() => _selectedImageIndex = index);
+                      },
+                      itemBuilder: (_, index) {
+                        return GestureDetector(
+                          onTap: () =>
+                              _openImageViewer(galleryImages, index),
+                          child: CachedNetworkImage(
+                            imageUrl: galleryImages[index],
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                            fadeInDuration: Duration.zero,
+                            fadeOutDuration: Duration.zero,
+                            memCacheWidth: 900,
+                            placeholder: (_, __) => const AppShimmerBox(
+                              width: double.infinity,
+                              height: double.infinity,
+                              borderRadius: 0,
+                            ),
+                            errorWidget: (_, __, ___) => _imagePlaceholder(),
+                          ),
+                        );
+                      },
+                    ),
 
                   // Soft dark overlay
-                  Container(color: Colors.black.withOpacity(0.08)),
+                  IgnorePointer(
+                    child: Container(color: Colors.black.withValues(alpha: 0.08)),
+                  ),
 
-                  // "Standard" badge at top-left
+                  if (multi)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      height: 64,
+                      child: IgnorePointer(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.transparent,
+                                Colors.black.withValues(alpha: 0.42),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                  // Cabin type badge — top-left
                   Positioned(
                     left: 10,
                     top: 10,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
-                        color: const Color(0xF2FFFFFF), // White 95%
+                        color: const Color(0xF2FFFFFF),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -272,12 +356,15 @@ class _BookSpaceViewState extends State<BookSpaceView> {
                     ),
                   ),
 
-                  // Timing badge at bottom-left (rgba(20, 18, 30, 0.72))
+                  // Timing badge — top-right (dots take bottom center)
                   Positioned(
-                    left: 10,
-                    bottom: 10,
+                    right: 10,
+                    top: 10,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xB814121E),
                         borderRadius: BorderRadius.circular(8),
@@ -285,7 +372,11 @@ class _BookSpaceViewState extends State<BookSpaceView> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.access_time, color: _kWhite, size: 12),
+                          const Icon(
+                            Icons.access_time,
+                            color: _kWhite,
+                            size: 12,
+                          ),
                           const SizedBox(width: 5),
                           Text(
                             _displayTiming,
@@ -299,6 +390,48 @@ class _BookSpaceViewState extends State<BookSpaceView> {
                       ),
                     ),
                   ),
+
+                  if (multi) ...[
+                    Positioned(
+                      left: 8,
+                      top: 0,
+                      bottom: 0,
+                      child: Center(
+                        child: _galleryArrowBtn(
+                          icon: Icons.chevron_left_rounded,
+                          enabled: _selectedImageIndex > 0,
+                          onTap: () => _goToGalleryImage(
+                            _selectedImageIndex - 1,
+                            galleryImages.length,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      right: 8,
+                      top: 0,
+                      bottom: 0,
+                      child: Center(
+                        child: _galleryArrowBtn(
+                          icon: Icons.chevron_right_rounded,
+                          enabled:
+                              _selectedImageIndex < galleryImages.length - 1,
+                          onTap: () => _goToGalleryImage(
+                            _selectedImageIndex + 1,
+                            galleryImages.length,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 12,
+                      child: Center(
+                        child: _galleryIndicator(galleryImages.length),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -537,7 +670,7 @@ class _BookSpaceViewState extends State<BookSpaceView> {
                 height: 32,
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [Color(0xFF5B4FE9), Color(0xFF7C3AED)],
+                    colors: [Color(0xFF26204A), Color(0xFF3D3568)],
                   ),
                   borderRadius: BorderRadius.circular(9),
                 ),
@@ -988,7 +1121,7 @@ class _BookSpaceViewState extends State<BookSpaceView> {
             Text(
               value,
               style: const TextStyle(
-                color: _kSteelGray, // #1E1B2E - Dark, crisp and visible
+                color: _kSteelGray, // #26204A - Dark, crisp and visible
                 fontSize: 12.5,
                 fontWeight: FontWeight.w600,
               ),
@@ -1119,84 +1252,139 @@ class _BookSpaceViewState extends State<BookSpaceView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header with Selago icon bg and arrow
-          Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: _kSelago,
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: const Icon(Icons.description_outlined,
-                    color: _kGovBay, size: 16),
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  'Terms and Conditions',
-                  style: TextStyle(
-                    color: _kSteelGray,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const Icon(Icons.keyboard_arrow_up, color: _kManatee, size: 20),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          // 8 Numbered Points
-          _buildTermItem('1.', 'Booking confirmation is subject to availability.'),
-          _buildTermItem('2.', 'Cancellations must be made at least 24 hours before the scheduled time.'),
-          _buildTermItem('3.', 'No-show bookings will be charged in full.'),
-          _buildTermItem('4.', 'Users must adhere to workspace rules and regulations.'),
-          _buildTermItem('5.', 'The management reserves the right to refuse entry.'),
-          _buildTermItem('6.', 'Payment is to be made at the counter upon arrival.'),
-          _buildTermItem('7.', 'Valid ID proof is required for check-in.'),
-          _buildTermItem('8.', 'Additional time usage will be charged at the standard rate.'),
-
-          const SizedBox(height: 6),
-          const Divider(color: _kAthensGray, height: 16),
-          const SizedBox(height: 6),
-
-          // Checkbox row
           GestureDetector(
-            onTap: () => setState(() => _acceptedTerms = !_acceptedTerms),
+            onTap: () => setState(() => _termsExpanded = !_termsExpanded),
             behavior: HitTestBehavior.opaque,
             child: Row(
               children: [
                 Container(
-                  width: 16,
-                  height: 16,
+                  width: 32,
+                  height: 32,
                   decoration: BoxDecoration(
-                    color: _acceptedTerms ? _kRoyalBlue : _kWhite,
-                    borderRadius: BorderRadius.circular(3),
-                    border: Border.all(
-                      color: _acceptedTerms ? _kRoyalBlue : const Color(0xFF767676),
-                      width: 1,
-                    ),
+                    color: _kSelago,
+                    borderRadius: BorderRadius.circular(9),
                   ),
-                  child: _acceptedTerms
-                      ? const Icon(Icons.check, size: 12, color: _kWhite)
-                      : null,
+                  child: const Icon(Icons.description_outlined,
+                      color: _kGovBay, size: 16),
                 ),
                 const SizedBox(width: 10),
                 const Expanded(
                   child: Text(
-                    'I have read and agree to the terms and conditions',
+                    'Terms and Conditions',
                     style: TextStyle(
                       color: _kSteelGray,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w400,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
+                Icon(
+                  _termsExpanded
+                      ? Icons.keyboard_arrow_up
+                      : Icons.keyboard_arrow_down,
+                  color: _kManatee,
+                  size: 20,
+                ),
               ],
             ),
+          ),
+
+          if (_termsExpanded) ...[
+            const SizedBox(height: 12),
+            _buildTermItem('1.', 'Booking confirmation is subject to availability.'),
+            _buildTermItem('2.', 'Cancellations must be made at least 24 hours before the scheduled time.'),
+            _buildTermItem('3.', 'No-show bookings will be charged in full.'),
+            _buildTermItem('4.', 'Users must adhere to workspace rules and regulations.'),
+            _buildTermItem('5.', 'The management reserves the right to refuse entry.'),
+            _buildTermItem('6.', 'Payment is to be made at the counter upon arrival.'),
+            _buildTermItem('7.', 'Valid ID proof is required for check-in.'),
+            _buildTermItem('8.', 'Additional time usage will be charged at the standard rate.'),
+            const SizedBox(height: 6),
+            const Divider(color: _kAthensGray, height: 16),
+            const SizedBox(height: 6),
+          ] else
+            const SizedBox(height: 12),
+
+          FormField<bool>(
+            key: _termsFieldKey,
+            initialValue: false,
+            validator: (v) =>
+                (v ?? false) ? null : 'Please accept the terms and conditions.',
+            builder: (state) {
+              final accepted = state.value ?? false;
+              final hasError = state.hasError;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  GestureDetector(
+                    onTap: () {
+                      final next = !accepted;
+                      state.didChange(next);
+                      setState(() => _acceptedTerms = next);
+                    },
+                    behavior: HitTestBehavior.opaque,
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            color: accepted ? _kRoyalBlue : _kWhite,
+                            borderRadius: BorderRadius.circular(3),
+                            border: Border.all(
+                              color: accepted
+                                  ? _kRoyalBlue
+                                  : (hasError
+                                      ? const Color(0xFFDC2626)
+                                      : const Color(0xFF767676)),
+                              width: 1.2,
+                            ),
+                          ),
+                          child: accepted
+                              ? const Icon(Icons.check,
+                                  size: 12, color: _kWhite)
+                              : null,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'I have read and agree to the terms and conditions',
+                            style: TextStyle(
+                              color: hasError
+                                  ? const Color(0xFFDC2626)
+                                  : _kSteelGray,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (hasError) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.error_outline_rounded,
+                            size: 14, color: Color(0xFFDC2626)),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            state.errorText ??
+                                'Please accept the terms and conditions.',
+                            style: const TextStyle(
+                              color: Color(0xFFDC2626),
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -1366,12 +1554,30 @@ class _BookSpaceViewState extends State<BookSpaceView> {
   // 12. RELATED SPACES SECTION (Horizontal List)
   // ═══════════════════════════════════════════════════════════════════════════
   Widget _buildRelatedSpacesSection() {
+    if (!Get.isRegistered<SpacesController>() || space == null) {
+      return const SizedBox.shrink();
+    }
+
+    final current = space!;
+    final related = Get.find<SpacesController>()
+        .spaces
+        .where(
+          (item) =>
+              item.id != current.id &&
+              item.isActive &&
+              item.isChamber == current.isChamber,
+        )
+        .take(5)
+        .toList();
+
+    if (related.isEmpty) return const SizedBox.shrink();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: const Text(
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 14),
+          child: Text(
             'Related Spaces',
             style: TextStyle(
               color: _kSteelGray,
@@ -1383,125 +1589,137 @@ class _BookSpaceViewState extends State<BookSpaceView> {
         const SizedBox(height: 12),
         SizedBox(
           height: 185,
-          child: ListView(
+          child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 14),
-            children: [
-              _buildRelatedCard(
-                name: 'Z fb bdn x - Kyu jbm',
-                location: 'Did ch kk vnndm',
-                price: '₹652816',
-                imageUrl:
-                    'https://images.unsplash.com/photo-1497366811353-6870744d04b2',
-              ),
-              const SizedBox(width: 12),
-              _buildRelatedCard(
-                name: 'Sri Sai Balaji Apartment - 3 floor',
-                location:
-                    'Flat No:301, H.No: 1-68/22, Arunodaya Colony, Madhapur, Hyderabad',
-                price: '₹2500',
-                imageUrl:
-                    'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d',
-              ),
-              const SizedBox(width: 12),
-              _buildRelatedCard(
-                name: 'tech cabin - bn',
-                location: 'Hyderabad, Telangana',
-                price: '₹100',
-                imageUrl:
-                    'https://images.unsplash.com/photo-1497366754035-f200968a6e72',
-              ),
-            ],
+            itemCount: related.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (_, index) => _buildRelatedCard(related[index]),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildRelatedCard({
-    required String name,
-    required String location,
-    required String price,
-    required String imageUrl,
-  }) {
-    return Container(
-      width: 200,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: _kWhite,
+  Widget _buildRelatedCard(SpaceModel item) {
+    final imageUrl =
+        item.images.isNotEmpty ? _mediaUrl(item.images.first) : '';
+    final price = item.price % 1 == 0
+        ? '₹${item.price.toStringAsFixed(0)}'
+        : '₹${item.price.toStringAsFixed(2)}';
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          Get.offNamed(
+            AppRoutes.spaceDetails,
+            arguments: item,
+            preventDuplicates: false,
+          );
+        },
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _kAthensGray, width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Image / Header
-          SizedBox(
-            height: 100,
-            width: double.infinity,
-            child: Image.network(
-              imageUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                color: _kSelago,
-                child: const Icon(Icons.business, color: _kRoyalBlue, size: 30),
-              ),
-            ),
+        child: Container(
+          width: 200,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: _kWhite,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _kAthensGray, width: 1),
           ),
-          Padding(
-            padding: const EdgeInsets.all(10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _kSteelGray,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  location,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _kManatee,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                height: 100,
+                width: double.infinity,
+                child: imageUrl.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: 100,
+                        fadeInDuration: Duration.zero,
+                        memCacheWidth: 400,
+                        placeholder: (_, __) => const AppShimmerBox(
+                          width: double.infinity,
+                          height: double.infinity,
+                          borderRadius: 0,
+                        ),
+                        errorWidget: (_, __, ___) => Container(
+                          color: _kSelago,
+                          child: const Icon(
+                            Icons.business,
+                            color: _kRoyalBlue,
+                            size: 30,
+                          ),
+                        ),
+                      )
+                    : Container(
+                        color: _kSelago,
+                        child: const Icon(
+                          Icons.business,
+                          color: _kRoyalBlue,
+                          size: 30,
+                        ),
+                      ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      price,
+                      item.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: _kGovBay,
-                        fontSize: 12.5,
+                        color: _kSteelGray,
+                        fontSize: 12,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const Text(
-                      '/hr',
-                      style: TextStyle(
+                    const SizedBox(height: 2),
+                    Text(
+                      item.address,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
                         color: _kManatee,
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w400,
                       ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          price,
+                          style: const TextStyle(
+                            color: _kGovBay,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const Text(
+                          '/hr',
+                          style: TextStyle(
+                            color: _kManatee,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1545,13 +1763,14 @@ class _BookSpaceViewState extends State<BookSpaceView> {
         ),
         const SizedBox(height: 6),
         TextFormField(
+          autofocus: false,
           controller: controller,
           keyboardType: keyboardType,
           readOnly: readOnly,
           onTap: onTap,
           validator: validator,
           style: const TextStyle(
-            color: _kSteelGray, // #1E1B2E - Crisp dark text
+            color: _kSteelGray, // #26204A - Crisp dark text
             fontSize: 13,
             fontWeight: FontWeight.w600,
           ),
@@ -1599,53 +1818,180 @@ class _BookSpaceViewState extends State<BookSpaceView> {
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // FLIPKART STYLE TOAST / SNACKBAR NOTIFICATION
-  // ═══════════════════════════════════════════════════════════════════════════
+  Widget _galleryArrowBtn({
+    required IconData icon,
+    required VoidCallback onTap,
+    required bool enabled,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        customBorder: const CircleBorder(),
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 160),
+          opacity: enabled ? 1 : 0.35,
+          child: Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.92),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF26204A).withValues(alpha: 0.16),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Icon(icon, size: 24, color: _kRoyalBlue),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _galleryIndicator(int imageCount) {
+    final indexes = _galleryDotIndexes(imageCount);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.28),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < indexes.length; i++) ...[
+            if (i > 0) const SizedBox(width: 5),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: indexes[i] == _selectedImageIndex ? 16 : 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: indexes[i] == _selectedImageIndex
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  List<int> _galleryDotIndexes(int count) {
+    if (count <= 3) return List<int>.generate(count, (i) => i);
+    if (_selectedImageIndex <= 0) return const [0, 1, 2];
+    if (_selectedImageIndex >= count - 1) {
+      return [count - 3, count - 2, count - 1];
+    }
+    return [
+      _selectedImageIndex - 1,
+      _selectedImageIndex,
+      _selectedImageIndex + 1,
+    ];
+  }
+
   void _showAppAlert({
     required String title,
     required String message,
     bool isSuccess = false,
   }) {
+    final accent =
+        isSuccess ? const Color(0xFF16803C) : const Color(0xFFDC2626);
+    final softBg =
+        isSuccess ? const Color(0xFFEAFBF0) : const Color(0xFFFFF1F2);
+
+    if (Get.isSnackbarOpen) Get.closeCurrentSnackbar();
+
     Get.rawSnackbar(
-      titleText: Text(
-        title,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-      messageText: Text(
-        message,
-        style: const TextStyle(
-          color: Color(0xFFE2E8F0),
-          fontSize: 12,
-          fontWeight: FontWeight.w400,
-        ),
-      ),
-      icon: Padding(
-        padding: const EdgeInsets.only(left: 4, right: 6),
-        child: Icon(
-          isSuccess ? Icons.check_circle_rounded : Icons.info_outline_rounded,
-          color: isSuccess ? const Color(0xFF10B981) : const Color(0xFFEF4444),
-          size: 24,
-        ),
-      ),
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: const Color(0xFF1E1B2E), // Deep steel gray dark background
-      borderRadius: 12,
-      margin: const EdgeInsets.fromLTRB(14, 0, 14, 20),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      duration: const Duration(seconds: 4),
-      forwardAnimationCurve: Curves.easeOutBack,
+      snackPosition: SnackPosition.TOP,
+      backgroundColor: softBg,
+      borderRadius: 14,
+      margin: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      duration: const Duration(seconds: 3),
+      animationDuration: const Duration(milliseconds: 420),
+      forwardAnimationCurve: Curves.easeOutCubic,
+      reverseAnimationCurve: Curves.easeInCubic,
+      borderColor: accent.withOpacity(0.35),
+      borderWidth: 1,
       boxShadows: [
         BoxShadow(
-          color: Colors.black.withOpacity(0.3),
-          blurRadius: 16,
+          color: accent.withOpacity(0.18),
+          blurRadius: 18,
           offset: const Offset(0, 6),
         ),
       ],
+      messageText: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: _kWhite,
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: [
+                BoxShadow(
+                  color: accent.withOpacity(0.15),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Icon(
+              isSuccess
+                  ? Icons.check_circle_rounded
+                  : Icons.error_outline_rounded,
+              color: accent,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: accent,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.1,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  message,
+                  style: const TextStyle(
+                    color: _kSteelGray,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _scrollToTerms() {
+    final ctx = _termsKey.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 380),
+      curve: Curves.easeOutCubic,
+      alignment: 0.2,
     );
   }
 
@@ -1653,21 +1999,36 @@ class _BookSpaceViewState extends State<BookSpaceView> {
   // SUBMIT & API LOGIC
   // ═══════════════════════════════════════════════════════════════════════════
   Future<void> _confirmBooking() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    final formOk = _formKey.currentState?.validate() ?? false;
 
     if (!_acceptedTerms) {
+      _termsFieldKey.currentState?.validate();
+      _scrollToTerms();
       _showAppAlert(
         title: 'Terms Required',
-        message: 'Please accept the terms and conditions.',
+        message: 'Please accept the terms and conditions to continue.',
         isSuccess: false,
       );
       return;
     }
 
+    if (!formOk) return;
+
     if (_bookingSlots.isEmpty || _totalHours <= 0) {
       _showAppAlert(
         title: 'Invalid Schedule',
         message: 'Please select valid start & end dates and times.',
+        isSuccess: false,
+      );
+      return;
+    }
+
+    if (_isStartDateTimeInPast()) {
+      _showAppAlert(
+        title: 'Invalid Time',
+        message:
+            'Selected start time has already passed. Please choose a future time.',
         isSuccess: false,
       );
       return;
@@ -1704,16 +2065,80 @@ class _BookSpaceViewState extends State<BookSpaceView> {
       if (!mounted) return;
 
       if (Get.isRegistered<BookingsController>()) {
-        await Get.find<BookingsController>().loadBookings();
+        Get.find<BookingsController>().loadBookings();
       }
 
-      Get.find<NavigationController>().changeTab(3);
-      Get.until((r) => r.settings.name == AppRoutes.dashboard);
+      FocusManager.instance.primaryFocus?.unfocus();
 
-      _showAppAlert(
-        title: 'Booking Confirmed!',
-        message: res['message']?.toString() ?? 'Your booking has been placed successfully.',
-        isSuccess: true,
+      final s = space!;
+      final bookingId = _extractBookingId(res);
+      final hoursLabel = _totalHours == _totalHours.roundToDouble()
+          ? '${_totalHours.toInt()}h'
+          : '${_totalHours.toStringAsFixed(1)}h';
+      final peopleCount = _selectedSeatIds.isEmpty ? 1 : _selectedSeatIds.length;
+      final gallery = s.images
+          .map(_mediaUrl)
+          .where((u) => u.isNotEmpty)
+          .toList();
+      final imageUrl = gallery.isEmpty ? '' : gallery.first;
+
+      final bookingModel = BookingModel(
+        id: bookingId,
+        spaceName: s.name,
+        location: s.address,
+        spaceType: s.isChamber
+            ? 'Medical Chamber'
+            : s.isCafe
+                ? 'Cafe & Dining'
+                : 'Co-Working Space',
+        startDate: _startDateController.text.trim(),
+        startTime: _startTimeController.text.trim(),
+        endDate: _endDateController.text.trim(),
+        endTime: _endTimeController.text.trim(),
+        duration: hoursLabel,
+        days: '1',
+        seats: peopleCount,
+        amount: _formatPrice(_totalPrice),
+        createdAt: DateTime.now().toIso8601String(),
+        status: BookingStatus.confirmed,
+        paymentStatus: PaymentStatus.pending,
+        paymentMode: PaymentMode.cash,
+        customerName: _fullNameController.text.trim(),
+        customerEmail: StorageService.userEmail,
+        customerMobile: _mobileController.text.trim(),
+        totalHours: _totalHours,
+        hourlyRate: s.price,
+        capacity: s.capacity,
+        extraCharge: _extraCharge,
+        selectedSeats: _selectedSeatIds.toList(),
+        bookingBasis: 'hourly',
+      );
+
+      if (Get.isRegistered<NotificationController>()) {
+        Get.find<NotificationController>().refreshQuietly();
+      }
+
+      await BookingSuccessDialog.show(
+        spaceName: s.name,
+        location: s.address,
+        dateText: _startDateController.text.trim(),
+        timeText:
+            '${_startTimeController.text.trim()} - ${_endTimeController.text.trim()} ($hoursLabel)',
+        peopleText: peopleCount == 1 ? '1 Person' : '$peopleCount People',
+        bookingId: bookingId.isEmpty
+            ? 'IRYAX${DateTime.now().millisecondsSinceEpoch % 1000000}'
+            : bookingId,
+        hourlyRateText: '${_formatPrice(s.price)}/hr',
+        totalAmountText: _formatPrice(_totalPrice),
+        imageUrl: imageUrl,
+        paymentLabel: 'Pay at Counter',
+        booking: bookingModel,
+        onViewBooking: () {
+          if (Get.isRegistered<NavigationController>()) {
+            Get.find<NavigationController>().changeTab(2);
+          }
+          Get.until((r) => r.settings.name == AppRoutes.dashboard);
+        },
       );
     } catch (e) {
       if (!mounted) return;
@@ -1781,7 +2206,7 @@ class _BookSpaceViewState extends State<BookSpaceView> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: _kRoyalBlue, // #5B4FE9 header & selected day
+              primary: _kRoyalBlue, // #26204A header & selected day
               onPrimary: Colors.white,
               surface: Colors.white,
               onSurface: _kSteelGray,
@@ -1795,6 +2220,14 @@ class _BookSpaceViewState extends State<BookSpaceView> {
     if (r == null) return;
     setState(() => c.text =
         '${r.day.toString().padLeft(2, '0')}-${r.month.toString().padLeft(2, '0')}-${r.year}');
+    if (_isStartDateTimeInPast()) {
+      _showAppAlert(
+        title: 'Invalid Time',
+        message:
+            'Selected start time has already passed for this date. Please choose a future time.',
+        isSuccess: false,
+      );
+    }
   }
 
   Future<void> _pickTime(TextEditingController c, {required bool isStart}) async {
@@ -1805,7 +2238,7 @@ class _BookSpaceViewState extends State<BookSpaceView> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: _kRoyalBlue, // #5B4FE9 dial hand & active elements
+              primary: _kRoyalBlue, // #26204A dial hand & active elements
               onPrimary: Colors.white,
               surface: Colors.white,
               onSurface: _kSteelGray,
@@ -1827,15 +2260,48 @@ class _BookSpaceViewState extends State<BookSpaceView> {
       },
     );
     if (r == null) return;
+
+    final timeText =
+        '${r.hourOfPeriod == 0 ? 12 : r.hourOfPeriod}:${r.minute.toString().padLeft(2, '0')}';
+    final period = r.period == DayPeriod.am ? 'AM' : 'PM';
+
+    if (isStart &&
+        _isDateTimeInPast(
+          _startDateController.text,
+          _to24Hour(timeText, period),
+        )) {
+      _showAppAlert(
+        title: 'Invalid Time',
+        message:
+            'Selected start time has already passed. Please choose a future time.',
+        isSuccess: false,
+      );
+      return;
+    }
+
     setState(() {
-      c.text =
-          '${r.hourOfPeriod == 0 ? 12 : r.hourOfPeriod}:${r.minute.toString().padLeft(2, '0')}';
+      c.text = timeText;
       if (isStart) {
-        _startPeriod = r.period == DayPeriod.am ? 'AM' : 'PM';
+        _startPeriod = period;
       } else {
-        _endPeriod = r.period == DayPeriod.am ? 'AM' : 'PM';
+        _endPeriod = period;
       }
     });
+  }
+
+  bool _isStartDateTimeInPast() =>
+      _isDateTimeInPast(_startDateController.text, _selectedStartTime24);
+
+  bool _isDateTimeInPast(String uiDate, String time24) {
+    final date = _parseUiDate(uiDate);
+    if (date == null || time24.isEmpty) return false;
+    final parts = time24.split(':');
+    if (parts.length != 2) return false;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return false;
+    final selected = DateTime(date.year, date.month, date.day, hour, minute);
+    return !selected.isAfter(DateTime.now());
   }
 
   String _to24Hour(String value, String period) {
@@ -1895,6 +2361,129 @@ class _BookSpaceViewState extends State<BookSpaceView> {
     return 'https://spaceapi.iryax.com/${path.replaceAll('\\', '/')}';
   }
 
+  String _extractBookingId(Map<String, dynamic> res) {
+    dynamic raw = res['data'] ?? res['booking'] ?? res;
+    if (raw is Map) {
+      final id = raw['_id']?.toString() ??
+          raw['id']?.toString() ??
+          raw['bookingId']?.toString() ??
+          '';
+      if (id.isNotEmpty) return id;
+    }
+    return res['_id']?.toString() ??
+        res['id']?.toString() ??
+        res['bookingId']?.toString() ??
+        '';
+  }
+
   String? _requiredValidator(String? v) =>
       (v == null || v.trim().isEmpty) ? 'Required' : null;
+}
+
+class _BookSpaceImageViewer extends StatefulWidget {
+  const _BookSpaceImageViewer({
+    required this.images,
+    required this.initialIndex,
+  });
+
+  final List<String> images;
+  final int initialIndex;
+
+  @override
+  State<_BookSpaceImageViewer> createState() => _BookSpaceImageViewerState();
+}
+
+class _BookSpaceImageViewerState extends State<_BookSpaceImageViewer> {
+  late int _index;
+  late final PageController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.initialIndex;
+    _controller = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            PageView.builder(
+              controller: _controller,
+              itemCount: widget.images.length,
+              onPageChanged: (i) => setState(() => _index = i),
+              itemBuilder: (_, i) {
+                return InteractiveViewer(
+                  minScale: 1,
+                  maxScale: 4,
+                  child: Center(
+                    child: CachedNetworkImage(
+                      imageUrl: widget.images[i],
+                      fit: BoxFit.contain,
+                      width: double.infinity,
+                      height: double.infinity,
+                      fadeInDuration: Duration.zero,
+                      fadeOutDuration: Duration.zero,
+                      placeholder: (_, __) => const Center(
+                        child: CircularProgressIndicator(
+                          color: Colors.white70,
+                          strokeWidth: 2,
+                        ),
+                      ),
+                      errorWidget: (_, __, ___) => const Icon(
+                        Icons.broken_image_outlined,
+                        color: Colors.white54,
+                        size: 48,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Material(
+                color: Colors.white.withValues(alpha: 0.14),
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () => Navigator.of(context).pop(),
+                  child: const SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: Icon(Icons.close_rounded, color: Colors.white),
+                  ),
+                ),
+              ),
+            ),
+            if (widget.images.length > 1)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 18,
+                child: Text(
+                  '${_index + 1} / ${widget.images.length}',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 }

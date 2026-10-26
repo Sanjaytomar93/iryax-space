@@ -25,10 +25,8 @@ class IryaxTextField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return TextFormField(
-      // SizedBox(
-      // height: 54,
-      // child: TextField(
         controller: controller,
+        autofocus: false,
         obscureText: obscureText,
         keyboardType: keyboardType,
         validator: validator,
@@ -95,7 +93,6 @@ class IryaxTextField extends StatelessWidget {
             height: 1.1,
           ),
         ),
-      // ),
     );
   }
 }

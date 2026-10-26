@@ -1,6 +1,7 @@
 import 'package:get/get.dart';
 import 'package:iryax_spaces/modules/bookings/controller/bookings_controller.dart';
 import 'package:iryax_spaces/modules/dashboard(home)/controller/home_controller.dart';
+import 'package:iryax_spaces/modules/notifications/controller/notification_controller.dart';
 import 'package:iryax_spaces/modules/profile/controller/profile_controller.dart';
 
 import '../../spaces/controller/spaces_controller.dart';
@@ -34,6 +35,13 @@ class NavigationBinding extends Bindings {
     if (!Get.isRegistered<BookingsController>()) {
       Get.put<BookingsController>(
         BookingsController(),
+        permanent: true,
+      );
+    }
+
+    if (!Get.isRegistered<NotificationController>()) {
+      Get.put<NotificationController>(
+        NotificationController(),
         permanent: true,
       );
     }

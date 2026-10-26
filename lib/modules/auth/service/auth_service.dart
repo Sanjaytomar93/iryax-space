@@ -100,4 +100,78 @@ class AuthService {
           'Unable to register. Please try again.',
     );
   }
+
+  Future<String> forgotPassword({
+    required String email,
+  }) async {
+    final response = await http.post(
+      Uri.parse(
+        ApiEndpoints.forgotPassword,
+      ),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: jsonEncode({
+        'email': email,
+      }),
+    );
+
+    Map<String, dynamic> data = {};
+
+    if (response.body.isNotEmpty) {
+      data = Map<String, dynamic>.from(
+        jsonDecode(response.body),
+      );
+    }
+
+    if (response.statusCode >= 200 &&
+        response.statusCode < 300) {
+      return data['message']?.toString() ??
+          'Password reset request sent successfully.';
+    }
+
+    throw Exception(
+      data['message']?.toString() ??
+          'Unable to process forgot password. Please try again.',
+    );
+  }
+
+  Future<String> resetPassword({
+    required String email,
+    required String newPassword,
+  }) async {
+    final response = await http.post(
+      Uri.parse(
+        ApiEndpoints.resetPassword,
+      ),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: jsonEncode({
+        'email': email,
+        'newPassword': newPassword,
+      }),
+    );
+
+    Map<String, dynamic> data = {};
+
+    if (response.body.isNotEmpty) {
+      data = Map<String, dynamic>.from(
+        jsonDecode(response.body),
+      );
+    }
+
+    if (response.statusCode >= 200 &&
+        response.statusCode < 300) {
+      return data['message']?.toString() ??
+          'Password reset successfully.';
+    }
+
+    throw Exception(
+      data['message']?.toString() ??
+          'Unable to reset password. Please try again.',
+    );
+  }
 }

@@ -1,6 +1,9 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'package:iryax_spaces/core/widgets/app_shimmer.dart';
+import 'package:iryax_spaces/core/widgets/detail_nav_bar.dart';
 import 'package:iryax_spaces/modules/spaces/controller/spaces_controller.dart';
 import 'package:iryax_spaces/modules/spaces/model/booked_slot_model.dart';
 import 'package:iryax_spaces/modules/spaces/model/space_model.dart';
@@ -18,6 +21,7 @@ class SpaceDetailsView extends StatefulWidget {
 
 class _SpaceDetailsViewState extends State<SpaceDetailsView> {
   final SpacesService _spacesService = SpacesService();
+  final ScrollController _scrollController = ScrollController();
 
   SpaceModel? space;
 
@@ -30,6 +34,8 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
   String? bookedSlotsError;
 
   int selectedImageIndex = 0;
+  PageController? _galleryPageController;
+  bool _showAllBookedSlots = false;
 
   @override
   void initState() {
@@ -78,6 +84,8 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
         space = result;
 
         selectedImageIndex = 0;
+        _galleryPageController?.dispose();
+        _galleryPageController = PageController(initialPage: 0);
 
         isLoading = false;
       });
@@ -91,6 +99,95 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
 
         errorMessage = _cleanError(e);
       });
+    }
+  }
+
+  @override
+  void dispose() {
+    _galleryPageController?.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _openRelatedSpace(SpaceModel item) {
+    if (item.id == space?.id) return;
+
+    setState(() {
+      space = item;
+      selectedImageIndex = 0;
+      errorMessage = null;
+      bookedSlots = [];
+      bookedSlotsError = null;
+      _showAllBookedSlots = false;
+      _galleryPageController?.dispose();
+      _galleryPageController = PageController(initialPage: 0);
+    });
+
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(0);
+    }
+
+    _loadDetails(item.id);
+  }
+
+  Widget _cachedImage(
+    String url, {
+    BoxFit fit = BoxFit.cover,
+    double? width,
+    double? height,
+  }) {
+    return CachedNetworkImage(
+      imageUrl: url,
+      fit: fit,
+      width: width,
+      height: height,
+      fadeInDuration: Duration.zero,
+      fadeOutDuration: Duration.zero,
+      memCacheWidth: 900,
+      placeholder: (_, __) => const AppShimmerBox(
+        width: double.infinity,
+        height: double.infinity,
+        borderRadius: 0,
+      ),
+      errorWidget: (_, __, ___) => _imagePlaceholder(),
+    );
+  }
+
+  void _openImageViewer(List<String> images, int initialIndex) {
+    if (images.isEmpty) return;
+    final start = initialIndex.clamp(0, images.length - 1);
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black,
+        pageBuilder: (_, __, ___) => _SpaceImageViewer(
+          images: images,
+          initialIndex: start,
+          imageBuilder: (url) => _cachedImage(
+            url,
+            fit: BoxFit.contain,
+            width: double.infinity,
+            height: double.infinity,
+          ),
+        ),
+        transitionsBuilder: (_, animation, __, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+      ),
+    );
+  }
+
+  void _goToGalleryImage(int index, int total) {
+    if (total <= 0) return;
+    final next = index.clamp(0, total - 1);
+    if (next == selectedImageIndex) return;
+    setState(() => selectedImageIndex = next);
+    if (_galleryPageController?.hasClients == true) {
+      _galleryPageController!.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
     }
   }
 
@@ -111,7 +208,7 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
 
       setState(() {
         bookedSlots = result;
-
+        _showAllBookedSlots = false;
         isBookedSlotsLoading = false;
       });
     } catch (e) {
@@ -121,9 +218,8 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
 
       setState(() {
         bookedSlots.clear();
-
+        _showAllBookedSlots = false;
         isBookedSlotsLoading = false;
-
         bookedSlotsError = _cleanError(e);
       });
     }
@@ -149,9 +245,7 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
       return const Scaffold(
         backgroundColor: AppColors.lightBackground,
         body: SafeArea(
-          child: Center(
-            child: CircularProgressIndicator(color: AppColors.lightPrimary),
-          ),
+          child: SpaceDetailShimmer(),
         ),
       );
     }
@@ -209,6 +303,7 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
                 color: AppColors.lightPrimary,
                 onRefresh: _refresh,
                 child: ListView(
+                  controller: _scrollController,
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: EdgeInsets.zero,
                   children: [
@@ -259,7 +354,7 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
                               children: [
                                 Icon(
                                   Icons.verified_outlined,
-                                  color: Color(0xFF5B4FE9),
+                                  color: Color(0xFF26204A),
                                   size: 14,
                                 ),
                                 SizedBox(width: 6),
@@ -295,35 +390,16 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
   // ============================================================
 
   Widget _buildTopBar() {
-    return Container(
-      height: 50,
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      alignment: Alignment.centerLeft,
-      child: GestureDetector(
-        onTap: Get.back,
-        behavior: HitTestBehavior.opaque,
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.arrow_back,
-              color: Color(0xFF1E1B2E),
-              size: 20,
-            ),
-            SizedBox(width: 8),
-            Text(
-              'Back',
-              style: TextStyle(
-                color: Color(0xFF1E1B2E),
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    final title = space?.name.trim().isNotEmpty == true
+        ? space!.name.trim()
+        : 'Space Details';
+    final address = space?.address.trim() ?? '';
+    final type = space?.cabinType.trim() ?? '';
+    final subtitle = address.isNotEmpty
+        ? address
+        : (type.isNotEmpty ? type : 'Manage your workspace');
+
+    return DetailNavBar(title: title, subtitle: subtitle);
   }
 
   // ============================================================
@@ -340,15 +416,25 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
             .toList();
 
     if (galleryImages.isEmpty) {
-      return SizedBox(
-        height: 240,
-        width: double.infinity,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            _imagePlaceholder(),
-            Positioned(left: 14, top: 14, child: _categoryBadge(currentSpace)),
-          ],
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: SizedBox(
+            height: 240,
+            width: double.infinity,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                _imagePlaceholder(),
+                Positioned(
+                  left: 14,
+                  top: 14,
+                  child: _categoryBadge(currentSpace),
+                ),
+              ],
+            ),
+          ),
         ),
       );
     }
@@ -357,134 +443,197 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
       selectedImageIndex = 0;
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          height: 240,
+    _galleryPageController ??=
+        PageController(initialPage: selectedImageIndex);
+
+    final multi = galleryImages.length > 1;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: SizedBox(
+          height: 250,
           width: double.infinity,
           child: Stack(
             fit: StackFit.expand,
             children: [
-              Image.network(
-                galleryImages[selectedImageIndex],
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _imagePlaceholder(),
+              PageView.builder(
+                controller: _galleryPageController,
+                itemCount: galleryImages.length,
+                onPageChanged: (index) {
+                  setState(() => selectedImageIndex = index);
+                },
+                itemBuilder: (_, index) {
+                  return GestureDetector(
+                    onTap: () => _openImageViewer(galleryImages, index),
+                    child: _cachedImage(
+                      galleryImages[index],
+                      width: double.infinity,
+                      height: double.infinity,
+                    ),
+                  );
+                },
               ),
 
-              // Category Badge top-left
-              Positioned(
-                left: 14,
-                top: 14,
-                child: _categoryBadge(currentSpace),
-              ),
-
-              // 2 / 3 counter pill at bottom-center
-              if (galleryImages.length > 1)
+              // Soft bottom fade for dots / arrows contrast
+              if (multi)
                 Positioned(
                   left: 0,
                   right: 0,
-                  bottom: 12,
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xB814121E), // 72% dark
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.crop_original_rounded, color: Colors.white, size: 11),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${selectedImageIndex + 1} / ${galleryImages.length}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                  bottom: 0,
+                  height: 72,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.45),
                         ],
                       ),
                     ),
                   ),
                 ),
-            ],
-          ),
-        ),
 
-        // Thumbnails carousel
-        if (galleryImages.length > 1) ...[
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 60,
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              scrollDirection: Axis.horizontal,
-              itemCount: galleryImages.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 10),
-              itemBuilder: (_, index) {
-                final selected = selectedImageIndex == index;
+              Positioned(
+                left: 12,
+                top: 12,
+                child: _categoryBadge(currentSpace),
+              ),
 
-                return InkWell(
-                  onTap: () {
-                    setState(() {
-                      selectedImageIndex = index;
-                    });
-                  },
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    width: 60,
-                    height: 60,
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: selected
-                            ? const Color(0xFF5B4FE9) // Royal blue highlight
-                            : const Color(0xFFE7E7F0),
-                        width: selected ? 2 : 1,
-                      ),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: Image.network(
-                        galleryImages[index],
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _imagePlaceholder(),
+              if (multi) ...[
+                // Left arrow
+                Positioned(
+                  left: 8,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: _galleryArrowBtn(
+                      icon: Icons.chevron_left_rounded,
+                      enabled: selectedImageIndex > 0,
+                      onTap: () => _goToGalleryImage(
+                        selectedImageIndex - 1,
+                        galleryImages.length,
                       ),
                     ),
                   ),
-                );
-              },
-            ),
+                ),
+                // Right arrow
+                Positioned(
+                  right: 8,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: _galleryArrowBtn(
+                      icon: Icons.chevron_right_rounded,
+                      enabled:
+                          selectedImageIndex < galleryImages.length - 1,
+                      onTap: () => _goToGalleryImage(
+                        selectedImageIndex + 1,
+                        galleryImages.length,
+                      ),
+                    ),
+                  ),
+                ),
+                // Center-bottom dots (max 3 visible)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 14,
+                  child: Center(
+                    child: _galleryIndicator(galleryImages.length),
+                  ),
+                ),
+              ],
+            ],
           ),
-        ],
-      ],
+        ),
+      ),
     );
   }
 
-  Widget _galleryIndicator(int imageCount) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(imageCount, (index) {
-        final selected = selectedImageIndex == index;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          margin: EdgeInsets.only(right: index == imageCount - 1 ? 0 : 4),
-          width: selected ? 14 : 5,
-          height: 5,
-          decoration: BoxDecoration(
-            color: selected ? Colors.white : const Color(0x80FFFFFF),
-            borderRadius: BorderRadius.circular(4),
+  Widget _galleryArrowBtn({
+    required IconData icon,
+    required VoidCallback onTap,
+    required bool enabled,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        customBorder: const CircleBorder(),
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 160),
+          opacity: enabled ? 1 : 0.35,
+          child: Container(
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.92),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF26204A).withValues(alpha: 0.18),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Icon(icon, size: 26, color: AppColors.lightPrimary),
           ),
-        );
-      }),
+        ),
+      ),
     );
+  }
+
+  /// Shows up to 3 center dots for multi-image gallery.
+  Widget _galleryIndicator(int imageCount) {
+    final indexes = _galleryDotIndexes(imageCount);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.28),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < indexes.length; i++) ...[
+            if (i > 0) const SizedBox(width: 5),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: indexes[i] == selectedImageIndex ? 16 : 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: indexes[i] == selectedImageIndex
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  List<int> _galleryDotIndexes(int count) {
+    if (count <= 3) {
+      return List<int>.generate(count, (i) => i);
+    }
+    if (selectedImageIndex <= 0) return const [0, 1, 2];
+    if (selectedImageIndex >= count - 1) {
+      return [count - 3, count - 2, count - 1];
+    }
+    return [
+      selectedImageIndex - 1,
+      selectedImageIndex,
+      selectedImageIndex + 1,
+    ];
   }
 
   Widget _categoryBadge(SpaceModel currentSpace) {
@@ -521,7 +670,7 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
         const Text(
           'WORKSPACE DETAILS',
           style: TextStyle(
-            color: Color(0xFF5B4FE9), // Royal Blue
+            color: Color(0xFF26204A), // Royal Blue
             fontSize: 10,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.4,
@@ -533,7 +682,7 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
         Text(
           currentSpace.name.toUpperCase(),
           style: const TextStyle(
-            color: Color(0xFF1E1B2E), // Steel Gray
+            color: Color(0xFF26204A), // Steel Gray
             fontSize: 15.5,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.1,
@@ -553,7 +702,7 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
             children: [
               const Icon(
                 Icons.location_on_outlined,
-                color: Color(0xFF5B4FE9),
+                color: Color(0xFF26204A),
                 size: 13,
               ),
 
@@ -591,33 +740,89 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
 
         const SizedBox(height: 12),
 
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Text(
-              _formatPrice(currentSpace.price),
-              style: const TextStyle(
-                color: Color(0xFF1E1B2E),
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-
-            const SizedBox(width: 4),
-
-            const Text(
-              '/ HOUR',
-              style: TextStyle(
-                color: Color(0xFF8A8A99),
-                fontSize: 10,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 0.3,
-              ),
-            ),
-          ],
-        ),
+        _buildPriceChip(currentSpace.price),
       ],
+    );
+  }
+
+  Widget _buildPriceChip(double price) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF26204A), Color(0xFF3D3568)],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF26204A).withValues(alpha: 0.22),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.payments_rounded,
+              color: Colors.white,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'HOURLY RATE',
+                  style: TextStyle(
+                    color: Color(0xFFC8C5E0),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: _formatPrice(price),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          height: 1.15,
+                        ),
+                      ),
+                      const TextSpan(
+                        text: ' / hr',
+                        style: TextStyle(
+                          color: Color(0xFFC8C5E0),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -629,95 +834,209 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
     final currentSpace = space!;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE7E7F0), width: 1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE7E7F0)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF26204A).withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFFF4F2FF), Color(0xFFFFFFFF)],
+              ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF26204A), Color(0xFF4338CA)],
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.schedule_rounded,
+                    color: Colors.white,
+                    size: 17,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'OPERATING HOURS',
+                        style: TextStyle(
+                          color: Color(0xFF26204A),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'When this space is available',
+                        style: TextStyle(
+                          color: Color(0xFF8A8A99),
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 4, 14, 14),
+            child: currentSpace.is24x7
+                ? Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEAFBF0),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFF16803C).withValues(alpha: 0.25),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.all_inclusive_rounded,
+                          color: Color(0xFF16803C),
+                          size: 16,
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'Open 24 Hours • 7 Days',
+                          style: TextStyle(
+                            color: Color(0xFF16803C),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: _buildHourTile(
+                          icon: Icons.wb_sunny_rounded,
+                          iconColor: const Color(0xFFE5A100),
+                          iconBg: const Color(0xFFFFF6DE),
+                          label: 'OPENS',
+                          value: _formatTime(currentSpace.openTime),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F0FD),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 14,
+                            color: Color(0xFF4338CA),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: _buildHourTile(
+                          icon: Icons.nightlight_round,
+                          iconColor: const Color(0xFF4338CA),
+                          iconBg: const Color(0xFFF1F0FD),
+                          label: 'CLOSES',
+                          value: _formatTime(currentSpace.closeTime),
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHourTile({
+    required IconData icon,
+    required Color iconColor,
+    required Color iconBg,
+    required String label,
+    required String value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F8FC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE7E7F0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            children: const [
-              Icon(
-                Icons.access_time_rounded,
-                color: Color(0xFF5B4FE9), // Royal Blue
-                size: 15,
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Icon(icon, size: 13, color: iconColor),
               ),
-              SizedBox(width: 8),
+              const SizedBox(width: 6),
               Text(
-                'OPERATING HOURS',
-                style: TextStyle(
-                  color: Color(0xFF1E1B2E),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.3,
+                label,
+                style: const TextStyle(
+                  color: Color(0xFF8A8A99),
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
                 ),
               ),
             ],
           ),
-
-          const SizedBox(height: 10),
-
-          if (currentSpace.is24x7)
-            const Center(
-              child: Text(
-                'Open 24 Hours • 7 Days',
-                style: TextStyle(
-                  color: Color(0xFF16803C),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            )
-          else
-            Row(
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('☀️ ', style: TextStyle(fontSize: 13)),
-                    Text(
-                      _formatTime(currentSpace.openTime),
-                      style: const TextStyle(
-                        color: Color(0xFF1E1B2E),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-
-                const Expanded(
-                  child: Center(
-                    child: Text(
-                      '→',
-                      style: TextStyle(
-                        color: Color(0xFF8A8A99),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ),
-                ),
-
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('🌙 ', style: TextStyle(fontSize: 13)),
-                    Text(
-                      _formatTime(currentSpace.closeTime),
-                      style: const TextStyle(
-                        color: Color(0xFF1E1B2E),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Color(0xFF26204A),
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
             ),
+          ),
         ],
       ),
     );
@@ -776,7 +1095,7 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
         const Text(
           'AMENITIES',
           style: TextStyle(
-            color: Color(0xFF1E1B2E),
+            color: Color(0xFF26204A),
             fontSize: 12,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.2,
@@ -836,7 +1155,7 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: Color(0xFF1E1B2E),
+                          color: Color(0xFF26204A),
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
                         ),
@@ -885,7 +1204,7 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: const Color(0xFF5B4FE9), size: 14),
+        Icon(icon, color: const Color(0xFF26204A), size: 14),
         const SizedBox(width: 5),
         Text(
           label,
@@ -913,15 +1232,21 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
           child: SizedBox(
             height: 48,
             child: ElevatedButton(
-              onPressed:
-                  currentSpace.isActive
-                      ? () {
-                        Get.toNamed(
-                          AppRoutes.bookSpace,
-                          arguments: currentSpace,
-                        );
-                      }
-                      : null,
+              onPressed: () {
+                if (!currentSpace.isActive) {
+                  _showAppAlert(
+                    title: 'Space Unavailable',
+                    message:
+                        'This space is currently inactive and not available for booking.',
+                    isSuccess: false,
+                  );
+                  return;
+                }
+                Get.toNamed(
+                  AppRoutes.bookSpace,
+                  arguments: currentSpace,
+                );
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF16803C), // Jewel Forest Green
                 foregroundColor: Colors.white,
@@ -949,19 +1274,25 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
           child: SizedBox(
             height: 48,
             child: OutlinedButton(
-              onPressed:
-                  currentSpace.isActive
-                      ? () {
-                        Get.toNamed(
-                          AppRoutes.siteVisit,
-                          arguments: currentSpace,
-                        );
-                      }
-                      : null,
+              onPressed: () {
+                if (!currentSpace.isActive) {
+                  _showAppAlert(
+                    title: 'Space Unavailable',
+                    message:
+                        'This space is currently inactive and not accepting site visits.',
+                    isSuccess: false,
+                  );
+                  return;
+                }
+                Get.toNamed(
+                  AppRoutes.siteVisit,
+                  arguments: currentSpace,
+                );
+              },
               style: OutlinedButton.styleFrom(
                 backgroundColor: Colors.white,
                 side: const BorderSide(color: Color(0xFFE7E7F0), width: 1.2),
-                foregroundColor: const Color(0xFF1E1B2E),
+                foregroundColor: const Color(0xFF26204A),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -978,6 +1309,69 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
           ),
         ),
       ],
+    );
+  }
+
+  void _showAppAlert({
+    required String title,
+    required String message,
+    bool isSuccess = false,
+  }) {
+    final accent =
+        isSuccess ? const Color(0xFF16803C) : const Color(0xFFDC2626);
+    final softBg =
+        isSuccess ? const Color(0xFFEAFBF0) : const Color(0xFFFFF1F2);
+
+    if (Get.isSnackbarOpen) Get.closeCurrentSnackbar();
+
+    Get.rawSnackbar(
+      snackPosition: SnackPosition.TOP,
+      backgroundColor: softBg,
+      borderRadius: 14,
+      margin: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      duration: const Duration(seconds: 3),
+      animationDuration: const Duration(milliseconds: 420),
+      forwardAnimationCurve: Curves.easeOutCubic,
+      reverseAnimationCurve: Curves.easeInCubic,
+      borderColor: accent.withValues(alpha: 0.35),
+      borderWidth: 1,
+      boxShadows: [
+        BoxShadow(
+          color: const Color(0xFF26204A).withValues(alpha: 0.06),
+          blurRadius: 16,
+          offset: const Offset(0, 4),
+        ),
+      ],
+      icon: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.12),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          isSuccess ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+          color: accent,
+          size: 18,
+        ),
+      ),
+      titleText: Text(
+        title,
+        style: TextStyle(
+          color: accent,
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      messageText: Text(
+        message,
+        style: const TextStyle(
+          color: Color(0xFF26204A),
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
     );
   }
 
@@ -1021,7 +1415,7 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
                     Text(
                       'Already Booked Slots',
                       style: TextStyle(
-                        color: Color(0xFF1E1B2E),
+                        color: Color(0xFF26204A),
                         fontSize: 12.5,
                         fontWeight: FontWeight.w600,
                       ),
@@ -1071,7 +1465,7 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Color(0xFF5B4FE9),
+                  color: Color(0xFF26204A),
                 ),
               ),
             )
@@ -1109,16 +1503,71 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
                 ),
               ),
             )
-          else
-            ...bookedSlots.map(
+          else ...[
+            ..._visibleBookedSlots().map(
               (slot) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.only(bottom: 6),
                 child: _bookedSlotCard(slot),
               ),
             ),
+            if (bookedSlots.length > 5)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _showAllBookedSlots = !_showAllBookedSlots;
+                    });
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F0FD),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFE7E7F0)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          _showAllBookedSlots
+                              ? 'Show less'
+                              : 'View all ${bookedSlots.length} bookings',
+                          style: const TextStyle(
+                            color: Color(0xFF26204A),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(
+                          _showAllBookedSlots
+                              ? Icons.keyboard_arrow_up_rounded
+                              : Icons.keyboard_arrow_down_rounded,
+                          size: 18,
+                          color: const Color(0xFF26204A),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ],
       ),
     );
+  }
+
+  /// Latest first; 5 by default, full list when expanded.
+  List<BookedSlotModel> _visibleBookedSlots() {
+    final sorted = [...bookedSlots]..sort((a, b) {
+      final aKey = '${a.startDate} ${a.startTime}';
+      final bKey = '${b.startDate} ${b.startTime}';
+      return bKey.compareTo(aKey);
+    });
+    if (_showAllBookedSlots || sorted.length <= 5) return sorted;
+    return sorted.take(5).toList();
   }
 
   Widget _bookedSlotCard(BookedSlotModel slot) {
@@ -1133,12 +1582,12 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
         '${_formatTime(slot.startTime)} → ${_formatTime(slot.endTime)}';
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF7F7), // Soft light pink
-        borderRadius: BorderRadius.circular(10),
+        color: const Color(0xFFFFF7F7),
+        borderRadius: BorderRadius.circular(8),
         border: const Border(
-          left: BorderSide(color: Color(0xFFEF4444), width: 3),
+          left: BorderSide(color: Color(0xFFEF4444), width: 2.5),
         ),
       ),
       child: Column(
@@ -1148,59 +1597,50 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
             children: [
               const Icon(
                 Icons.calendar_today_outlined,
-                size: 13,
+                size: 11,
                 color: Color(0xFF8A8A99),
               ),
-
-              const SizedBox(width: 6),
-
+              const SizedBox(width: 5),
               const Text(
                 'DATE  ',
                 style: TextStyle(
-                  color: Color(0xFF1E1B2E),
-                  fontSize: 10.5,
+                  color: Color(0xFF26204A),
+                  fontSize: 9.5,
                   fontWeight: FontWeight.w600,
                 ),
               ),
-
               Expanded(
                 child: Text(
                   dateText,
                   style: const TextStyle(
-                    color: Color(0xFF1E1B2E),
-                    fontSize: 11.5,
+                    color: Color(0xFF26204A),
+                    fontSize: 10.5,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
             ],
           ),
-
-          const SizedBox(height: 5),
-
+          const SizedBox(height: 3),
           Row(
             children: [
               const Icon(
                 Icons.access_time_rounded,
-                size: 13,
+                size: 11,
                 color: Color(0xFFEF4444),
               ),
-
-              const SizedBox(width: 6),
-
+              const SizedBox(width: 5),
               Text(
                 timeText,
                 style: const TextStyle(
-                  color: Color(0xFF1E1B2E),
-                  fontSize: 11.5,
+                  color: Color(0xFF26204A),
+                  fontSize: 10.5,
                   fontWeight: FontWeight.w500,
                 ),
               ),
             ],
           ),
-
-          const SizedBox(height: 8),
-
+          const SizedBox(height: 5),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -1208,32 +1648,29 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
                 'BOOKED BY',
                 style: TextStyle(
                   color: Color(0xFF8A8A99),
-                  fontSize: 9.5,
+                  fontSize: 8.5,
                   fontWeight: FontWeight.w500,
                   letterSpacing: 0.3,
                 ),
               ),
-
               const Spacer(),
-
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
                     slot.name.isNotEmpty ? slot.name : 'User',
                     style: const TextStyle(
-                      color: Color(0xFF1E1B2E),
-                      fontSize: 11.5,
+                      color: Color(0xFF26204A),
+                      fontSize: 10.5,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-
                   if (slot.email.isNotEmpty)
                     Text(
                       slot.email,
                       style: const TextStyle(
                         color: Color(0xFFEF4444),
-                        fontSize: 10,
+                        fontSize: 9,
                         fontWeight: FontWeight.w400,
                       ),
                     ),
@@ -1280,7 +1717,7 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
         Text(
           currentSpace.isChamber ? 'RELATED CHAMBERS' : 'RELATED SPACES',
           style: const TextStyle(
-            color: Color(0xFF1E1B2E),
+            color: Color(0xFF26204A),
             fontSize: 13,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.2,
@@ -1310,38 +1747,36 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
     final imageUrl =
         item.images.isNotEmpty ? _buildMediaUrl(item.images.first) : '';
 
-    return InkWell(
-      onTap: () {
-        Get.toNamed(AppRoutes.spaceDetails, arguments: item);
-      },
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        width: 195,
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE7E7F0), width: 1),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Stack(
-              children: [
-                SizedBox(
-                  width: double.infinity,
-                  height: 105,
-                  child:
-                      imageUrl.isNotEmpty
-                          ? Image.network(
-                            imageUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) {
-                              return _imagePlaceholder();
-                            },
-                          )
-                          : _imagePlaceholder(),
-                ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openRelatedSpace(item),
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          width: 195,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE7E7F0), width: 1),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Stack(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    height: 105,
+                    child:
+                        imageUrl.isNotEmpty
+                            ? _cachedImage(
+                              imageUrl,
+                              width: double.infinity,
+                              height: 105,
+                            )
+                            : _imagePlaceholder(),
+                  ),
 
                 Positioned(
                   left: 8,
@@ -1358,7 +1793,7 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
                     child: Text(
                       _categoryName(item),
                       style: const TextStyle(
-                        color: Color(0xFF1E1B2E),
+                        color: Color(0xFF26204A),
                         fontSize: 9,
                         fontWeight: FontWeight.w600,
                       ),
@@ -1378,7 +1813,7 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: Color(0xFF1E1B2E),
+                      color: Color(0xFF26204A),
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
@@ -1405,7 +1840,7 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
                         TextSpan(
                           text: _formatPrice(item.price),
                           style: const TextStyle(
-                            color: Color(0xFF1E1B2E),
+                            color: Color(0xFF26204A),
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1426,6 +1861,7 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -1479,11 +1915,29 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
   }
 
   String _formatPrice(double price) {
-    if (price % 1 == 0) {
-      return '₹${price.toInt()}';
+    if (price % 1 != 0) {
+      return '₹${price.toStringAsFixed(2)}';
     }
 
-    return '₹${price.toStringAsFixed(2)}';
+    final digits = price.toInt().abs().toString();
+    if (digits.length <= 3) {
+      return '₹$digits';
+    }
+
+    final head = digits.substring(0, digits.length - 3);
+    final tail = digits.substring(digits.length - 3);
+    final groups = <String>[];
+    var rest = head;
+    while (rest.length > 2) {
+      groups.insert(0, rest.substring(rest.length - 2));
+      rest = rest.substring(0, rest.length - 2);
+    }
+    if (rest.isNotEmpty) {
+      groups.insert(0, rest);
+    }
+
+    final sign = price < 0 ? '-' : '';
+    return '$sign₹${groups.join(',')},$tail';
   }
 
   String _formatTime(String value) {
@@ -1543,6 +1997,98 @@ class _SpaceDetailsViewState extends State<SpaceDetailsView> {
 
   String _cleanError(Object error) {
     return error.toString().replaceFirst('Exception: ', '');
+  }
+}
+
+class _SpaceImageViewer extends StatefulWidget {
+  const _SpaceImageViewer({
+    required this.images,
+    required this.initialIndex,
+    required this.imageBuilder,
+  });
+
+  final List<String> images;
+  final int initialIndex;
+  final Widget Function(String url) imageBuilder;
+
+  @override
+  State<_SpaceImageViewer> createState() => _SpaceImageViewerState();
+}
+
+class _SpaceImageViewerState extends State<_SpaceImageViewer> {
+  late int _index;
+  late final PageController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.initialIndex;
+    _controller = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            PageView.builder(
+              controller: _controller,
+              itemCount: widget.images.length,
+              onPageChanged: (i) => setState(() => _index = i),
+              itemBuilder: (_, i) {
+                return InteractiveViewer(
+                  minScale: 1,
+                  maxScale: 4,
+                  child: Center(
+                    child: widget.imageBuilder(widget.images[i]),
+                  ),
+                );
+              },
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Material(
+                color: Colors.white.withValues(alpha: 0.14),
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () => Navigator.of(context).pop(),
+                  child: const SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: Icon(Icons.close_rounded, color: Colors.white),
+                  ),
+                ),
+              ),
+            ),
+            if (widget.images.length > 1)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 18,
+                child: Text(
+                  '${_index + 1} / ${widget.images.length}',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

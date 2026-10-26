@@ -1,13 +1,14 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-
 import 'package:iryax_spaces/core/services/storage_service.dart';
+import 'package:iryax_spaces/core/widgets/app_shimmer.dart';
 import 'package:iryax_spaces/modules/dashboard(home)/controller/home_controller.dart';
 import 'package:iryax_spaces/modules/bookings/controller/bookings_controller.dart';
 import 'package:iryax_spaces/modules/bookings/model/booking_model.dart';
 import 'package:iryax_spaces/modules/bookings/service/invoice_pdf_service.dart';
+import 'package:iryax_spaces/modules/navigation/controller/navigation_controller.dart';
+import 'package:iryax_spaces/modules/spaces/controller/spaces_controller.dart';
+const int _kRecentBookingsLimit = 3;
 
 // ─────────────────────────────────────────────────────────
 // Figma Design Tokens
@@ -18,12 +19,12 @@ class _DC {
   static const white         = Color(0xFFFFFFFF);
 
   // Text
-  static const steelGray     = Color(0xFF1E1B2E);
+  static const steelGray     = Color(0xFF26204A);
   static const manatee       = Color(0xFF8A8A99);
   static const frenchGray    = Color(0xFFB4B4C2);
 
   // Primary accent
-  static const royalBlue     = Color(0xFF5B4FE9);
+  static const royalBlue     = Color(0xFF26204A);
   static const governorBay   = Color(0xFF4338CA);
 
   // Borders
@@ -82,74 +83,6 @@ TextStyle _inter({
       fontWeight: weight,
       height: height,
     );
-
-// ─────────────────────────────────────────────────────────
-// Shimmer Effect Widget (pure Flutter, no extra package)
-// ─────────────────────────────────────────────────────────
-class _ShimmerBox extends StatefulWidget {
-  const _ShimmerBox({
-    required this.width,
-    required this.height,
-    this.borderRadius = 10,
-  });
-  final double width;
-  final double height;
-  final double borderRadius;
-
-  @override
-  State<_ShimmerBox> createState() => _ShimmerBoxState();
-}
-
-class _ShimmerBoxState extends State<_ShimmerBox>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _ctrl,
-      builder: (_, __) {
-        final t = (_ctrl.value * 3) - 1;
-        return Container(
-          width: widget.width,
-          height: widget.height,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(widget.borderRadius),
-            gradient: LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: const [
-                Color(0xFFEBEBF4),
-                Color(0xFFF4F4FB),
-                Color(0xFFEBEBF4),
-              ],
-              stops: [
-                math.max(0.0, t - 0.3),
-                math.max(0.0, math.min(1.0, t)),
-                math.min(1.0, t + 0.3),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
 
 // ─────────────────────────────────────────────────────────
 // Dashboard View
@@ -214,17 +147,12 @@ class _DashboardViewState extends State<DashboardView> {
             _buildHeader(),
             const SizedBox(height: 14),
             _buildStatsGrid(),
+            const SizedBox(height: 14),
+            _buildTypeCategories(),
             const SizedBox(height: 12),
-            _buildSearchBar(),
-            const SizedBox(height: 8),
-            _buildDateFilter(context),
-            const SizedBox(height: 8),
-            _buildStatusAndTypeRow(),
-            const SizedBox(height: 8),
-            _buildPaymentDropdown(),
-            const SizedBox(height: 6),
+            _buildFiltersCard(context),
+            const SizedBox(height: 12),
             _buildBookingCount(),
-            _buildClearFilters(),
             const SizedBox(height: 12),
             _buildBookingList(),
             const SizedBox(height: 80),
@@ -235,48 +163,118 @@ class _DashboardViewState extends State<DashboardView> {
   }
 
   // ══════════════════════════════════════════════════════
-  //  HEADER  — "My Dashboard / Welcome back, kumar"
+  //  HEADER  — greeting banner
   // ══════════════════════════════════════════════════════
+  String _greetingForHour(int hour) {
+    if (hour < 12) return 'Good Morning,';
+    if (hour < 17) return 'Good Afternoon,';
+    return 'Good Evening,';
+  }
+
   Widget _buildHeader() {
     final name = StorageService.userName.trim();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(
-                text: 'My ',
-                style: _roboto(
-                  size: 22,
-                  color: _DC.steelGray,
-                  weight: FontWeight.w700,
-                  height: 26 / 22,
-                ),
-              ),
-              TextSpan(
-                text: 'Dashboard',
-                style: _roboto(
-                  size: 22,
-                  color: _DC.royalBlue,
-                  weight: FontWeight.w700,
-                  height: 26 / 22,
-                ),
-              ),
+    final now = DateTime.now();
+    final displayName = name.isNotEmpty ? name : 'there';
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          // Same brand colors as before (#26204A family)
+          gradient: LinearGradient(
+            begin: Alignment(-0.72, -0.7),
+            end: Alignment(0.72, 0.7),
+            colors: [
+              Color(0xFF26204A),
+              Color(0xFF3D3568),
             ],
           ),
         ),
-        const SizedBox(height: 3),
-        Text(
-          name.isNotEmpty ? 'Welcome back, $name' : 'Welcome back',
-          style: _roboto(size: 13, color: _DC.manatee, height: 15 / 13),
+        child: Stack(
+          children: [
+            // Soft top-right glow
+            Positioned(
+              right: -70,
+              top: -90,
+              child: IgnorePointer(
+                child: Container(
+                  width: 240,
+                  height: 240,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        const Color(0xFF4F4780).withValues(alpha: 0.9),
+                        const Color(0xFF3D3568).withValues(alpha: 0.35),
+                        const Color(0xFF26204A).withValues(alpha: 0.0),
+                      ],
+                      stops: const [0.0, 0.42, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // White 8% circle overlay (banner style)
+            Positioned(
+              right: -30,
+              top: -32,
+              child: IgnorePointer(
+                child: Container(
+                  width: 140,
+                  height: 140,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.08),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 26, 18, 18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _greetingForHour(now.hour),
+                    style: _roboto(
+                      size: 14,
+                      color: _DC.white.withValues(alpha: 0.92),
+                      weight: FontWeight.w500,
+                      height: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$displayName 👋',
+                    style: _roboto(
+                      size: 24,
+                      color: _DC.white,
+                      weight: FontWeight.w700,
+                      height: 1.15,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Book premium workspaces, track visits, and manage every booking from one place.',
+                    style: _roboto(
+                      size: 11,
+                      color: _DC.white.withValues(alpha: 0.9),
+                      weight: FontWeight.w400,
+                      height: 16 / 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
   // ══════════════════════════════════════════════════════
-  //  STATS GRID  — 3 rows × 2 columns
+  //  STATS GRID  — 2 rows × 3 columns
   // ══════════════════════════════════════════════════════
   Widget _buildStatsGrid() {
     return Obx(() {
@@ -312,93 +310,81 @@ class _DashboardViewState extends State<DashboardView> {
 
       final sel = _bookings.selectedStatus.value;
 
+      Widget row(List<Widget> cards) => Row(
+            children: [
+              for (var i = 0; i < cards.length; i++) ...[
+                if (i > 0) const SizedBox(width: 6),
+                Expanded(child: cards[i]),
+              ],
+            ],
+          );
+
       return Column(
         children: [
-          // Row 1 — Total | Pending
-          Row(children: [
-            Expanded(
-              child: _statCard(
-                title:     'TOTAL',
-                value:     '$total',
-                subtitle:  'all reservations',
-                icon:      Icons.inbox_outlined,
-                iconColor: _DC.govBayIcon,
-                iconBg:    _DC.selagoPurple,
-                selected:  sel == 'All Status',
-                highlighted: true,
-                onTap:     () => _applyFilter('All Status'),
-              ),
+          row([
+            _statCard(
+              title: 'TOTAL',
+              value: '$total',
+              subtitle: 'all reservations',
+              icon: Icons.inbox_outlined,
+              iconColor: _DC.govBayIcon,
+              iconBg: _DC.selagoPurple,
+              selected: sel == 'All Status',
+              highlighted: true,
+              onTap: () => _applyFilter('All Status'),
             ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: _statCard(
-                title:     'PENDING',
-                value:     '$pending',
-                subtitle:  'awaiting confirmation',
-                icon:      Icons.access_time_rounded,
-                iconColor: _DC.vesuvius,
-                iconBg:    _DC.eggSour,
-                selected:  sel == 'Pending',
-                onTap:     () => _applyFilter('Pending'),
-              ),
+            _statCard(
+              title: 'PENDING',
+              value: '$pending',
+              subtitle: 'awaiting confirmation',
+              icon: Icons.access_time_rounded,
+              iconColor: _DC.vesuvius,
+              iconBg: _DC.eggSour,
+              selected: sel == 'Pending',
+              onTap: () => _applyFilter('Pending'),
             ),
-          ]),
-          const SizedBox(height: 9),
-          // Row 2 — Confirmed | Active
-          Row(children: [
-            Expanded(
-              child: _statCard(
-                title:     'CONFIRMED',
-                value:     '$confirmed',
-                subtitle:  'approved reservations',
-                icon:      Icons.check_circle_outline,
-                iconColor: _DC.funBlue,
-                iconBg:    _DC.selago2,
-                selected:  sel == 'Confirmed',
-                onTap:     () => _applyFilter('Confirmed'),
-              ),
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: _statCard(
-                title:     'ACTIVE',
-                value:     '$active',
-                subtitle:  'active & confirmed',
-                icon:      Icons.home_outlined,
-                iconColor: _DC.jewel,
-                iconBg:    _DC.ottoman,
-                selected:  sel == 'Active',
-                onTap:     () => _applyFilter('Active'),
-              ),
+            _statCard(
+              title: 'CONFIRMED',
+              value: '$confirmed',
+              subtitle: 'approved reservations',
+              icon: Icons.check_circle_outline,
+              iconColor: _DC.funBlue,
+              iconBg: _DC.selago2,
+              selected: sel == 'Confirmed',
+              onTap: () => _applyFilter('Confirmed'),
             ),
           ]),
-          const SizedBox(height: 9),
-          // Row 3 — Completed | Cancelled
-          Row(children: [
-            Expanded(
-              child: _statCard(
-                title:     'COMPLETED',
-                value:     '$completed',
-                subtitle:  'confirmed & paid',
-                icon:      Icons.check_circle_outline,
-                iconColor: _DC.purpleHeart,
-                iconBg:    _DC.selagoViolet,
-                selected:  sel == 'Completed',
-                onTap:     () => _applyFilter('Completed'),
-              ),
+          const SizedBox(height: 6),
+          row([
+            _statCard(
+              title: 'ACTIVE',
+              value: '$active',
+              subtitle: 'active & confirmed',
+              icon: Icons.home_outlined,
+              iconColor: _DC.jewel,
+              iconBg: _DC.ottoman,
+              selected: sel == 'Active',
+              onTap: () => _applyFilter('Active'),
             ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: _statCard(
-                title:     'CANCELLED',
-                value:     '$cancelled',
-                subtitle:  'cancelled reservations',
-                icon:      Icons.cancel_outlined,
-                iconColor: _DC.tallPoppy,
-                iconBg:    _DC.provPink,
-                selected:  sel == 'Cancelled',
-                onTap:     () => _applyFilter('Cancelled'),
-              ),
+            _statCard(
+              title: 'COMPLETED',
+              value: '$completed',
+              subtitle: 'confirmed & paid',
+              icon: Icons.check_circle_outline,
+              iconColor: _DC.purpleHeart,
+              iconBg: _DC.selagoViolet,
+              selected: sel == 'Completed',
+              onTap: () => _applyFilter('Completed'),
+            ),
+            _statCard(
+              title: 'CANCELLED',
+              value: '$cancelled',
+              subtitle: 'cancelled reservations',
+              icon: Icons.cancel_outlined,
+              iconColor: _DC.tallPoppy,
+              iconBg: _DC.provPink,
+              selected: sel == 'Cancelled',
+              onTap: () => _applyFilter('Cancelled'),
             ),
           ]),
         ],
@@ -424,16 +410,15 @@ class _DashboardViewState extends State<DashboardView> {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.all(13),
+        padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
         decoration: BoxDecoration(
           color: _DC.white,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(color: borderColor),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Title + icon
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -441,43 +426,40 @@ class _DashboardViewState extends State<DashboardView> {
                   child: Text(
                     title,
                     style: _roboto(
-                      size: 10,
+                      size: 8,
                       color: _DC.manatee,
                       weight: FontWeight.w700,
-                      height: 12 / 10,
-                      letterSpacing: 0.5,
+                      height: 1.1,
+                      letterSpacing: 0.3,
                     ),
                   ),
                 ),
                 Container(
-                  width: 26,
-                  height: 26,
+                  width: 20,
+                  height: 20,
                   decoration: BoxDecoration(
                     color: iconBg,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Icon(icon, color: iconColor, size: 14),
+                  child: Icon(icon, color: iconColor, size: 11),
                 ),
               ],
             ),
-            const SizedBox(height: 6),
-            // Value
+            const SizedBox(height: 2),
             Text(
               value,
               style: _roboto(
-                size: 20,
+                size: 14,
                 color: _DC.steelGray,
                 weight: FontWeight.w700,
-                height: 24 / 20,
+                height: 1.1,
               ),
             ),
-            const SizedBox(height: 2),
-            // Subtitle
             Text(
               subtitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: _roboto(size: 10, color: _DC.manatee, height: 12 / 10),
+              style: _roboto(size: 8, color: _DC.manatee, height: 1.15),
             ),
           ],
         ),
@@ -519,128 +501,9 @@ class _DashboardViewState extends State<DashboardView> {
     );
   }
 
-  // ── Shimmer placeholder for 3×2 stat grid ─────────────
-  Widget _buildStatsShimmer() {
-    Widget shimmerCard() => LayoutBuilder(
-          builder: (context, constraints) {
-            final w = constraints.maxWidth;
-            return Container(
-              padding: const EdgeInsets.all(13),
-              decoration: BoxDecoration(
-                color: _DC.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: _DC.athensGray),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      _ShimmerBox(width: w * 0.45, height: 10),
-                      const Spacer(),
-                      const _ShimmerBox(width: 26, height: 26, borderRadius: 8),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  _ShimmerBox(width: w * 0.3, height: 20),
-                  const SizedBox(height: 6),
-                  _ShimmerBox(width: w * 0.65, height: 10),
-                ],
-              ),
-            );
-          },
-        );
+  Widget _buildStatsShimmer() => const StatsGridShimmer();
 
-    Widget shimmerRow() => Row(children: [
-          Expanded(child: shimmerCard()),
-          const SizedBox(width: 9),
-          Expanded(child: shimmerCard()),
-        ]);
-
-    return Column(
-      children: [
-        shimmerRow(),
-        const SizedBox(height: 9),
-        shimmerRow(),
-        const SizedBox(height: 9),
-        shimmerRow(),
-      ],
-    );
-  }
-
-  // ── Shimmer placeholder for booking card list ──────────
-  Widget _buildBookingShimmer() {
-    Widget shimmerBookingCard() => Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: _DC.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: _DC.athensGray, width: 1.1),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const _ShimmerBox(width: 200, height: 16),
-              const SizedBox(height: 10),
-              const _ShimmerBox(width: 260, height: 12),
-              const SizedBox(height: 12),
-              const Divider(height: 1, thickness: 1, color: _DC.athensGray),
-              const SizedBox(height: 12),
-              Row(children: const [
-                _ShimmerBox(width: 80, height: 12),
-                Spacer(),
-                _ShimmerBox(width: 100, height: 12),
-              ]),
-              const SizedBox(height: 10),
-              Row(children: const [
-                _ShimmerBox(width: 60, height: 12),
-                Spacer(),
-                _ShimmerBox(width: 70, height: 22, borderRadius: 7),
-                SizedBox(width: 6),
-                _ShimmerBox(width: 50, height: 22, borderRadius: 7),
-              ]),
-              const SizedBox(height: 10),
-              Row(children: const [
-                _ShimmerBox(width: 60, height: 12),
-                Spacer(),
-                _ShimmerBox(width: 80, height: 14),
-              ]),
-              const SizedBox(height: 14),
-              Row(children: [
-                Expanded(
-                  child: Container(
-                    height: 36,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      color: const Color(0xFFEBEBF4),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Container(
-                    height: 36,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      color: const Color(0xFFEBEBF4),
-                    ),
-                  ),
-                ),
-              ]),
-            ],
-          ),
-        );
-
-    return Column(
-      children: List.generate(
-        3,
-        (i) => Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: shimmerBookingCard(),
-        ),
-      ),
-    );
-  }
+  Widget _buildBookingShimmer() => const BookingListShimmer();
 
   void _applyFilter(String status) {
     _bookings.clearDashboardFilters();
@@ -648,20 +511,583 @@ class _DashboardViewState extends State<DashboardView> {
   }
 
   // ══════════════════════════════════════════════════════
-  //  SEARCH BAR
+  //  TYPE CATEGORIES (circular chips + images)
   // ══════════════════════════════════════════════════════
+  static const _typeCategories = <({
+    String label,
+    String bookingType,
+    String spacesCategory,
+    IconData icon,
+    String? imageUrl,
+  })>[
+    (
+      label: 'All',
+      bookingType: 'All Types',
+      spacesCategory: 'Co-Working',
+      icon: Icons.apps_rounded,
+      imageUrl: null,
+    ),
+    (
+      label: 'Coworking',
+      bookingType: 'Co-Working Space',
+      spacesCategory: 'Co-Working',
+      icon: Icons.business_center_outlined,
+      imageUrl:
+          'https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=240&q=80',
+    ),
+    (
+      label: 'Medical',
+      bookingType: 'Medical Chamber',
+      spacesCategory: 'Medical Chambers',
+      icon: Icons.medical_services_outlined,
+      imageUrl:
+          'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=240&q=80',
+    ),
+    (
+      label: 'Cafe',
+      bookingType: 'Cafe & Dining',
+      spacesCategory: 'Cafe & Dining',
+      icon: Icons.restaurant_menu_rounded,
+      imageUrl:
+          'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=240&q=80',
+    ),
+    (
+      label: 'Meeting',
+      bookingType: 'Meeting Room',
+      spacesCategory: 'Meeting Rooms',
+      icon: Icons.groups_outlined,
+      imageUrl:
+          'https://images.unsplash.com/photo-1497366216548-37526070297c?w=240&q=80',
+    ),
+    (
+      label: 'Private',
+      bookingType: 'Private Office',
+      spacesCategory: 'Private Offices',
+      icon: Icons.lock_outline_rounded,
+      imageUrl:
+          'https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=240&q=80',
+    ),
+  ];
+
+  void _openSpacesForCategory(String spacesCategory) {
+    if (Get.isRegistered<SpacesController>()) {
+      Get.find<SpacesController>().changeCategory(spacesCategory);
+    }
+    if (Get.isRegistered<NavigationController>()) {
+      Get.find<NavigationController>().changeTab(1);
+    }
+  }
+
+  void _onTypeCategoryTap(({
+    String label,
+    String bookingType,
+    String spacesCategory,
+    IconData icon,
+    String? imageUrl,
+  }) item) {
+    _bookings.changeType(item.bookingType);
+    _openSpacesForCategory(item.spacesCategory);
+  }
+
+  Widget _buildTypeCategories() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 12, 0, 12),
+      decoration: BoxDecoration(
+        color: _DC.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _DC.athensGray),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0626204A),
+            blurRadius: 14,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: _DC.selagoPurple,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.category_outlined,
+                    size: 15,
+                    color: _DC.royalBlue,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Browse by type',
+                    style: _roboto(
+                      size: 13.5,
+                      color: _DC.steelGray,
+                      weight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => _openSpacesForCategory(
+                    Get.isRegistered<SpacesController>()
+                        ? Get.find<SpacesController>().selectedCategory.value
+                        : 'Co-Working',
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Explore',
+                        style: _roboto(
+                          size: 11.5,
+                          color: _DC.royalBlue,
+                          weight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 11,
+                        color: _DC.royalBlue,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 22,
+                  height: 2.2,
+                  decoration: BoxDecoration(
+                    color: _DC.royalBlue,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Container(height: 1, color: _DC.athensGray),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Obx(() {
+            final selected = _bookings.selectedType.value;
+            return SizedBox(
+              height: 88,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.only(right: 12),
+                itemCount: _typeCategories.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (_, index) {
+                  final item = _typeCategories[index];
+                  final isSelected = selected == item.bookingType;
+                  return GestureDetector(
+                    onTap: () => _onTypeCategoryTap(item),
+                    child: SizedBox(
+                      width: 66,
+                      child: Column(
+                        children: [
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            width: 58,
+                            height: 58,
+                            padding: EdgeInsets.all(isSelected ? 2.8 : 2),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: _DC.white,
+                              border: Border.all(
+                                color: isSelected
+                                    ? _DC.royalBlue
+                                    : _DC.athensGray,
+                                width: isSelected ? 2.4 : 1.1,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: isSelected
+                                      ? _DC.royalBlue.withValues(alpha: 0.18)
+                                      : const Color(0x0A26204A),
+                                  blurRadius: isSelected ? 10 : 5,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: ClipOval(
+                              child: item.imageUrl == null
+                                  ? ColoredBox(
+                                      color: isSelected
+                                          ? _DC.selagoPurple
+                                          : const Color(0xFFF1F0FD),
+                                      child: Icon(
+                                        item.icon,
+                                        size: 24,
+                                        color: _DC.royalBlue,
+                                      ),
+                                    )
+                                  : Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        Image.network(
+                                          item.imageUrl!,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) =>
+                                              ColoredBox(
+                                            color: _DC.selagoPurple,
+                                            child: Icon(
+                                              item.icon,
+                                              size: 22,
+                                              color: _DC.royalBlue,
+                                            ),
+                                          ),
+                                          loadingBuilder:
+                                              (context, child, progress) {
+                                            if (progress == null) return child;
+                                            return ColoredBox(
+                                              color: _DC.selagoPurple,
+                                              child: Icon(
+                                                item.icon,
+                                                size: 18,
+                                                color: _DC.royalBlue
+                                                    .withValues(alpha: 0.45),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                        if (isSelected)
+                                          ColoredBox(
+                                            color: _DC.royalBlue
+                                                .withValues(alpha: 0.12),
+                                          ),
+                                      ],
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            item.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: _roboto(
+                              size: 10.5,
+                              color: isSelected
+                                  ? _DC.royalBlue
+                                  : _DC.steelGray,
+                              weight: isSelected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════
+  //  FILTERS — search + chip row (modern app style)
+  // ══════════════════════════════════════════════════════
+  Widget _buildFiltersCard(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSearchBar(),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 36,
+          child: Obx(() {
+            final status = _bookings.selectedStatus.value;
+            final payment = _bookings.selectedPaymentStatus.value;
+            final date = _bookings.selectedBookingDate.value;
+            final hasFilters =
+                _bookings.searchQuery.value.isNotEmpty ||
+                status != 'All Status' ||
+                payment != 'Payment Status' ||
+                date != null ||
+                _bookings.selectedType.value != 'All Types';
+
+            final dateLabel = date == null
+                ? 'Date'
+                : '${date.day.toString().padLeft(2, '0')}/'
+                    '${date.month.toString().padLeft(2, '0')}';
+
+            return ListView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              children: [
+                _filterChip(
+                  label: dateLabel,
+                  icon: Icons.calendar_today_outlined,
+                  selected: date != null,
+                  onTap: () => _pickBookingDate(context),
+                  onClear: date != null
+                      ? () => _bookings.changeBookingDate(null)
+                      : null,
+                ),
+                const SizedBox(width: 8),
+                _filterChip(
+                  label: status == 'All Status' ? 'Status' : status,
+                  icon: Icons.flag_outlined,
+                  selected: status != 'All Status',
+                  onTap: () => _showStatusSheet(context),
+                ),
+                const SizedBox(width: 8),
+                _filterChip(
+                  label: payment == 'Payment Status' ? 'Payment' : payment,
+                  icon: Icons.payments_outlined,
+                  selected: payment != 'Payment Status',
+                  onTap: () => _showPaymentSheet(context),
+                ),
+                if (hasFilters) ...[
+                  const SizedBox(width: 8),
+                  _filterChip(
+                    label: 'Clear',
+                    icon: Icons.close_rounded,
+                    selected: false,
+                    accent: true,
+                    onTap: _bookings.clearDashboardFilters,
+                  ),
+                ],
+              ],
+            );
+          }),
+        ),
+      ],
+    );
+  }
+
+  Widget _filterChip({
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+    VoidCallback? onClear,
+    bool accent = false,
+  }) {
+    final bg = accent
+        ? _DC.selagoPurple
+        : selected
+            ? _DC.royalBlue
+            : _DC.white;
+    final fg = accent
+        ? _DC.royalBlue
+        : selected
+            ? _DC.white
+            : _DC.steelGray;
+    final border = accent
+        ? _DC.royalBlue.withValues(alpha: 0.2)
+        : selected
+            ? _DC.royalBlue
+            : _DC.athensGray;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: border),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14, color: fg),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: _roboto(
+                  size: 12,
+                  color: fg,
+                  weight: FontWeight.w600,
+                ),
+              ),
+              if (onClear != null) ...[
+                const SizedBox(width: 4),
+                GestureDetector(
+                  onTap: onClear,
+                  child: Icon(Icons.close, size: 14, color: fg),
+                ),
+              ] else if (!accent && !selected) ...[
+                const SizedBox(width: 2),
+                Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: fg),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickBookingDate(BuildContext context) async {
+    final selected = _bookings.selectedBookingDate.value;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: selected ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+    );
+    if (picked != null) _bookings.changeBookingDate(picked);
+  }
+
+  void _showStatusSheet(BuildContext context) {
+    const items = [
+      'All Status',
+      'Pending',
+      'Confirmed',
+      'Active',
+      'Completed',
+      'Cancelled',
+    ];
+    _showFilterSheet(
+      context: context,
+      title: 'Status',
+      items: items,
+      selected: _bookings.selectedStatus.value,
+      onSelect: _bookings.changeStatus,
+    );
+  }
+
+  void _showPaymentSheet(BuildContext context) {
+    const items = [
+      'Payment Status',
+      'Pending',
+      'Paid',
+      'Failed',
+      'Refunded',
+    ];
+    _showFilterSheet(
+      context: context,
+      title: 'Payment Status',
+      items: items,
+      selected: _bookings.selectedPaymentStatus.value,
+      onSelect: _bookings.changePaymentStatus,
+      labelOf: (v) => v == 'Payment Status' ? 'All' : v,
+    );
+  }
+
+  void _showFilterSheet({
+    required BuildContext context,
+    required String title,
+    required List<String> items,
+    required String selected,
+    required ValueChanged<String> onSelect,
+    String Function(String)? labelOf,
+  }) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: _DC.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: _DC.athensGray,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  title,
+                  style: _roboto(
+                    size: 16,
+                    color: _DC.steelGray,
+                    weight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ...items.map((item) {
+                  final isSelected = item == selected;
+                  final label = labelOf?.call(item) ?? item;
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: Text(
+                      label,
+                      style: _roboto(
+                        size: 14,
+                        color: isSelected ? _DC.royalBlue : _DC.steelGray,
+                        weight:
+                            isSelected ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
+                    trailing: isSelected
+                        ? const Icon(
+                            Icons.check_circle_rounded,
+                            color: _DC.royalBlue,
+                            size: 20,
+                          )
+                        : null,
+                    onTap: () {
+                      onSelect(item);
+                      Navigator.pop(ctx);
+                    },
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildSearchBar() {
     return SizedBox(
-      height: 39,
+      height: 42,
       child: TextField(
+        autofocus: false,
         controller: _bookings.searchController,
         onChanged: _bookings.updateSearch,
-        style: _inter(size: 12.3, color: _DC.steelGray),
+        style: _inter(size: 13, color: _DC.steelGray),
         decoration: InputDecoration(
           hintText: 'Search bookings...',
-          hintStyle: _inter(size: 12.3, color: _DC.frenchGray),
-          prefixIcon:
-              const Icon(Icons.search_rounded, size: 15, color: _DC.frenchGray),
+          hintStyle: _inter(size: 13, color: _DC.frenchGray),
+          prefixIcon: const Icon(
+            Icons.search_rounded,
+            size: 18,
+            color: _DC.manatee,
+          ),
           filled: true,
           fillColor: _DC.white,
           isDense: true,
@@ -681,187 +1107,73 @@ class _DashboardViewState extends State<DashboardView> {
   }
 
   // ══════════════════════════════════════════════════════
-  //  DATE FILTER
-  // ══════════════════════════════════════════════════════
-  Widget _buildDateFilter(BuildContext context) {
-    return Obx(() {
-      final selected = _bookings.selectedBookingDate.value;
-      final text = selected == null
-          ? 'mm/dd/yyyy'
-          : '${selected.month.toString().padLeft(2, '0')}/'
-              '${selected.day.toString().padLeft(2, '0')}/'
-              '${selected.year}';
-
-      return GestureDetector(
-        onTap: () async {
-          final picked = await showDatePicker(
-            context: context,
-            initialDate: selected ?? DateTime.now(),
-            firstDate: DateTime(2020),
-            lastDate: DateTime(2035),
-          );
-          if (picked != null) _bookings.changeBookingDate(picked);
-        },
-        child: Container(
-          height: 36,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: BoxDecoration(
-            color: _DC.white,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: _DC.athensGray),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  text,
-                  style: _roboto(
-                    size: 12,
-                    color: _DC.steelGray,
-                    height: 14 / 12,
-                  ),
-                ),
-              ),
-              if (selected != null)
-                GestureDetector(
-                  onTap: () => _bookings.changeBookingDate(null),
-                  child: const Padding(
-                    padding: EdgeInsets.only(right: 8),
-                    child: Icon(Icons.close, size: 14, color: _DC.manatee),
-                  ),
-                ),
-              const Icon(Icons.calendar_today_outlined,
-                  size: 14, color: _DC.manatee),
-            ],
-          ),
-        ),
-      );
-    });
-  }
-
-  // ══════════════════════════════════════════════════════
-  //  STATUS + TYPE ROW
-  // ══════════════════════════════════════════════════════
-  Widget _buildStatusAndTypeRow() {
-    return Obx(() => Row(
-          children: [
-            Expanded(
-              child: _dropdown(
-                value: _bookings.selectedStatus.value,
-                items: const [
-                  'All Status',
-                  'Pending',
-                  'Confirmed',
-                  'Active',
-                  'Completed',
-                  'Cancelled',
-                ],
-                onChanged: (v) {
-                  if (v != null) _bookings.changeStatus(v);
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _dropdown(
-                value: _bookings.selectedType.value,
-                items: const [
-                  'All Types',
-                  'Co-Working Space',
-                  'Medical Chamber',
-                ],
-                onChanged: (v) {
-                  if (v != null) _bookings.changeType(v);
-                },
-              ),
-            ),
-          ],
-        ));
-  }
-
-  // ══════════════════════════════════════════════════════
-  //  PAYMENT STATUS DROPDOWN
-  // ══════════════════════════════════════════════════════
-  Widget _buildPaymentDropdown() {
-    return Obx(() => _dropdown(
-          value: _bookings.selectedPaymentStatus.value,
-          items: const ['Payment Status', 'Paid', 'Pending'],
-          onChanged: (v) {
-            if (v != null) _bookings.changePaymentStatus(v);
-          },
-        ));
-  }
-
-  Widget _dropdown({
-    required String value,
-    required List<String> items,
-    required ValueChanged<String?> onChanged,
-  }) {
-    return Container(
-      height: 36,
-      padding: const EdgeInsets.only(left: 14, right: 4),
-      decoration: BoxDecoration(
-        color: _DC.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _DC.athensGray),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          isExpanded: true,
-          icon: const Icon(Icons.keyboard_arrow_down_rounded,
-              size: 16, color: _DC.manatee),
-          style: _roboto(
-            size: 11.8,
-            color: _DC.steelGray,
-            height: 14 / 11.8,
-          ),
-          dropdownColor: _DC.white,
-          items: items
-              .map((item) => DropdownMenuItem<String>(
-                    value: item,
-                    child: Text(item,
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                  ))
-              .toList(),
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
-
-  // ══════════════════════════════════════════════════════
   //  BOOKING COUNT  &  CLEAR FILTERS
   // ══════════════════════════════════════════════════════
   Widget _buildBookingCount() {
-    return Obx(() => Align(
-          alignment: Alignment.centerRight,
-          child: Text(
-            'Showing ${_bookings.filteredBookings.length}'
-            ' of ${_bookings.bookings.length} bookings',
-            style: _roboto(size: 11.8, color: _DC.manatee),
-          ),
-        ));
-  }
-
-  Widget _buildClearFilters() {
     return Obx(() {
-      final hasFilters =
-          _bookings.searchQuery.value.isNotEmpty ||
-          _bookings.selectedStatus.value != 'All Status' ||
-          _bookings.selectedType.value != 'All Types' ||
-          _bookings.selectedPaymentStatus.value != 'Payment Status' ||
-          _bookings.selectedBookingDate.value != null;
-
-      if (!hasFilters) return const SizedBox.shrink();
-
-      return Align(
-        alignment: Alignment.centerRight,
-        child: TextButton.icon(
-          onPressed: _bookings.clearDashboardFilters,
-          icon: const Icon(Icons.refresh_rounded, size: 14),
-          label: Text('Clear filters', style: _roboto(size: 11, color: _DC.royalBlue)),
-        ),
+      final shown = _bookings.filteredBookings.length;
+      final total = _bookings.bookings.length;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: _DC.selagoPurple,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.history_rounded,
+                  size: 16,
+                  color: _DC.royalBlue,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Recent Bookings',
+                style: _roboto(
+                  size: 14.5,
+                  color: _DC.steelGray,
+                  weight: FontWeight.w700,
+                  height: 1.2,
+                ),
+              ),
+              const Spacer(),
+              if (shown > 0)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Text(
+                    'Showing $shown of $total bookings',
+                    style: _roboto(
+                      size: 11,
+                      color: _DC.royalBlue,
+                      weight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 2.5,
+                decoration: BoxDecoration(
+                  color: _DC.royalBlue,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Container(height: 1, color: _DC.athensGray),
+              ),
+            ],
+          ),
+        ],
       );
     });
   }
@@ -906,15 +1218,62 @@ class _DashboardViewState extends State<DashboardView> {
         return _buildEmptyState();
       }
 
+      final visible = list.length > _kRecentBookingsLimit
+          ? list.take(_kRecentBookingsLimit).toList()
+          : list;
+      final hasMore = list.length > _kRecentBookingsLimit;
+
       return Column(
-        children: list
-            .map((b) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _bookingCard(b),
-                ))
-            .toList(),
+        children: [
+          ...visible.map(
+            (b) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _bookingCard(b),
+            ),
+          ),
+          if (hasMore)
+            GestureDetector(
+              onTap: _openMyBookings,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: _DC.selagoPurple,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _DC.royalBlue.withValues(alpha: 0.15),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'View all ${list.length} bookings',
+                      style: _roboto(
+                        size: 12.5,
+                        color: _DC.royalBlue,
+                        weight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 16,
+                      color: _DC.royalBlue,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       );
     });
+  }
+
+  void _openMyBookings() {
+    if (Get.isRegistered<NavigationController>()) {
+      Get.find<NavigationController>().changeTab(2);
+    }
   }
 
   Widget _buildEmptyState() {
@@ -958,7 +1317,7 @@ class _DashboardViewState extends State<DashboardView> {
         border: Border.all(color: _DC.athensGray, width: 1.2),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x061E1B2E),
+            color: Color(0x0626204A),
             blurRadius: 20,
             offset: Offset(0, 6),
           ),
@@ -1147,18 +1506,24 @@ class _DashboardViewState extends State<DashboardView> {
           // ── Location & Owner ──
           Row(
             children: [
-              const Icon(
-                Icons.location_on_outlined,
-                size: 14,
-                color: _DC.manatee,
-              ),
-              const SizedBox(width: 4),
               Expanded(
-                child: Text(
-                  booking.location,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _roboto(size: 11.5, color: _DC.manatee),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.location_on_outlined,
+                      size: 14,
+                      color: _DC.manatee,
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        booking.location,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _roboto(size: 11.5, color: _DC.manatee),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(width: 8),
@@ -1171,9 +1536,14 @@ class _DashboardViewState extends State<DashboardView> {
                     color: _DC.manatee,
                   ),
                   const SizedBox(width: 4),
-                  Text(
-                    'Owner: ${booking.customerName}',
-                    style: _roboto(size: 11.5, color: _DC.manatee),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 140),
+                    child: Text(
+                      'Owner: ${booking.customerName}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _roboto(size: 11.5, color: _DC.manatee),
+                    ),
                   ),
                 ],
               ),
@@ -1196,22 +1566,18 @@ class _DashboardViewState extends State<DashboardView> {
                   weight: FontWeight.w600,
                 ),
               ),
-              const Spacer(),
-              Text(
-                booking.startDate,
-                style: _roboto(
-                  size: 11,
-                  color: _DC.steelGray,
-                  weight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                timeStr,
-                style: _roboto(
-                  size: 9.5,
-                  color: _DC.manatee,
-                  weight: FontWeight.w400,
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${booking.startDate} $timeStr',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: _roboto(
+                    size: 11,
+                    color: _DC.steelGray,
+                    weight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],
@@ -1339,8 +1705,8 @@ class _DashboardViewState extends State<DashboardView> {
         label = 'Pending';
         break;
       case BookingStatus.confirmed:
-        bg = _DC.selago2;
-        text = _DC.funBlue;
+        bg = const Color(0xFFD1FAE5);
+        text = const Color(0xFF047857);
         label = 'Confirmed';
         break;
       case BookingStatus.active:
@@ -1365,12 +1731,34 @@ class _DashboardViewState extends State<DashboardView> {
 
   // ── Payment chip ──
   Widget _paymentChip(BookingModel booking) {
-    final isPaid = booking.paymentStatus == PaymentStatus.paid;
-    return _chip(
-      label: isPaid ? 'Paid' : 'pending',
-      bg: isPaid ? _DC.ottoman : _DC.oldLace,
-      textColor: isPaid ? _DC.jewel : _DC.kuMera,
-    );
+    late final Color bg;
+    late final Color text;
+    late final String label;
+
+    switch (booking.paymentStatus) {
+      case PaymentStatus.paid:
+        bg = const Color(0xFFD1FAE5);
+        text = const Color(0xFF047857);
+        label = 'Paid';
+        break;
+      case PaymentStatus.failed:
+        bg = _DC.provPink;
+        text = _DC.tallPoppy;
+        label = 'Failed';
+        break;
+      case PaymentStatus.refunded:
+        bg = _DC.selago2;
+        text = _DC.funBlue;
+        label = 'Refunded';
+        break;
+      case PaymentStatus.pending:
+        bg = const Color(0xFFFEF9C3);
+        text = const Color(0xFF854D0E);
+        label = 'Pending';
+        break;
+    }
+
+    return _chip(label: label, bg: bg, textColor: text);
   }
 
   Widget _chip({
@@ -1382,7 +1770,7 @@ class _DashboardViewState extends State<DashboardView> {
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4.5),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(7.5),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Text(
         label,
